@@ -81,6 +81,36 @@ matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv --cif
 
 ---
 
+## Usage: Python SDK (For Jupyter Notebooks)
+
+MatGraph provides a powerful Python SDK for seamless integration into Jupyter Notebooks, Pandas workflows, or custom backend services.
+
+```python
+from matgraph import MatGraphSDK
+
+# Initialize SDK (Auto-loads MP_API_KEY from env if not provided)
+sdk = MatGraphSDK()
+
+# 1. Predict properties using Deep Learning
+results = sdk.predict("LiFePO4", model="m3gnet")
+print(f"Predicted Energy: {results[0]['m3gnet_energy']} eV")
+
+# 2. Generative Discovery (Substitution Analysis)
+discovery = sdk.substitute("LiFePO4", element_out="Li", element_in="Na")
+if discovery["is_more_stable"]:
+    print("New material is stable!")
+
+# 3. Simulate XRD Patterns
+xrd_data = sdk.xrd("LiFePO4")
+print(f"Top Peak Angle: {xrd_data['two_theta'][0]}")
+
+# 4. Model Analytics
+metrics = sdk.evaluate("LiFePO4", model="megnet")
+print(f"MAE: {metrics['band_gap_mae']}")
+```
+
+---
+
 ## Usage: The Modern GraphQL API
 
 Integrate MatGraph into your own web applications seamlessly using our robust, async GraphQL engine.
