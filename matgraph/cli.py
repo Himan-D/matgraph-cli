@@ -6,8 +6,29 @@ import uvicorn
 from typing import Optional
 from matgraph.core import run_pipeline, save_results
 
+import sys
+import importlib.metadata
+
 app = typer.Typer(help="MatGraph CLI: The complete Material Science ML Product.")
 console = Console()
+
+def version_callback(value: bool):
+    if value:
+        try:
+            version = importlib.metadata.version("matgraph-cli")
+        except importlib.metadata.PackageNotFoundError:
+            version = "unknown"
+        console.print(f"MatGraph CLI Version: [bold green]{version}[/bold green]")
+        console.print(f"Python Version: [bold cyan]{sys.version.split()[0]}[/bold cyan]")
+        raise typer.Exit()
+
+@app.callback()
+def main(
+    version: Optional[bool] = typer.Option(
+        None, "--version", "-v", callback=version_callback, is_eager=True, help="Show the application and Python version."
+    )
+):
+    pass
 
 @app.command()
 def setup(api_key: str):
