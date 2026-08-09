@@ -56,6 +56,63 @@ def simulate_xrd(structure):
         "hkls": [[hkl[0] for hkl in hkls] for hkls in pattern.hkls]
     }
 
+def substitute_material(formula: str, elem_out: str, elem_in: str, api_key: str):
+    """
+    Simulates elemental substitution (doping/alloying), a core technique in GNoME-like discovery.
+    Approximates new structural features and predicts thermodynamic stability.
+    """
+    from pymatgen.core import Composition
+    
+    docs = fetch_materials_data(formula, api_key)
+    if not docs:
+        raise ValueError(f"Could not find baseline data for {formula}.")
+        
+    doc = docs[0]
+    orig_comp = Composition(formula)
+    
+    if elem_out not in orig_comp:
+        raise ValueError(f"Element {elem_out} not found in {formula}.")
+        
+    # Create new hypothetical composition
+    new_comp_dict = orig_comp.as_dict()
+    new_comp_dict[elem_in] = new_comp_dict.pop(elem_out)
+    new_comp = Composition(new_comp_dict)
+    new_formula = new_comp.reduced_formula
+    
+    # Feature approximation (Vegard's law simplified: assume volume is constant for first-order estimation)
+    orig_features = extract_features(doc.structure) if doc.structure else {
+        "num_elements": len(orig_comp),
+        "mean_atomic_mass": orig_comp.weight / orig_comp.num_atoms,
+        "volume": 100.0,
+        "density": orig_comp.weight / 100.0
+    }
+    
+    new_mass = new_comp.weight / new_comp.num_atoms
+    new_features = {
+        "num_elements": len(new_comp),
+        "mean_atomic_mass": new_mass,
+        "volume": orig_features["volume"], # Assume similar volume
+        "density": (new_comp.weight / orig_comp.weight) * orig_features["density"]
+    }
+    
+    # Predict stability using M3GNet (Universal Potential)
+    orig_energy, orig_forces, _ = m3gnet_predict(orig_features)
+    new_energy, new_forces, _ = m3gnet_predict(new_features)
+    
+    return {
+        "original": {
+            "formula": formula,
+            "energy": orig_energy,
+            "max_force": max(orig_forces) if orig_forces else 0
+        },
+        "hypothetical": {
+            "formula": new_formula,
+            "energy": new_energy,
+            "max_force": max(new_forces) if new_forces else 0
+        },
+        "is_more_stable": new_energy < orig_energy
+    }
+
 def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, model: str = "cgcnn"):
     docs = fetch_materials_data(formula, api_key)
     

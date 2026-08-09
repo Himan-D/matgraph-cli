@@ -9,15 +9,13 @@
 
 ---
 
-**MatGraph** abstracts away the complexity of deep learning for material properties. Designed for both Material Science researchers and ML engineers, it provides a seamless interface to fetch, featurize, predict, and export crystal structures—all powered by modern technologies like **PyTorch**, **GraphQL**, and **uv**.
-
-## Key Features (v0.5.0 Update)
+## Key Features (v0.6.0 Update)
+*   **Generative Discovery (GNoME-inspired):** Simulate elemental substitution (e.g., swapping Li for Na) and predict thermodynamic stability to discover new materials.
 *   **Universal Interatomic Potentials (M3GNet):** New `m3gnet` architecture for predicting Energy, Forces, and Stresses using simulated 3-body interactions.
 *   **X-Ray Diffraction (XRD) Simulator:** Generate synthetic Cu-Kα XRD patterns directly from the CLI to identify material peaks.
 *   **Analytics & Evaluation:** `evaluate` command computes Mean Absolute Error (MAE) comparing PyTorch predictions directly against Materials Project ground truth.
 *   **Raw Structure Export:** Automatically export raw 3D crystal structures to standard `.cif` formats.
 *   **Multi-Architecture Support:** Seamlessly switch between CGCNN, MEGNet, and M3GNet models.
-*   **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
 
 ---
 
@@ -45,31 +43,37 @@ export MP_API_KEY="your_api_key_here"
 
 MatGraph's CLI is designed to be highly intuitive. 
 
-**1. X-Ray Diffraction (XRD) Simulation**
+**1. Generative Discovery (Elemental Substitution)**
+Inspired by DeepMind's GNoME, substitute elements in a known material and predict if the new hypothetical crystal will be thermodynamically stable:
+```bash
+matgraph substitute LiFePO4 Li Na
+```
+
+**2. X-Ray Diffraction (XRD) Simulation**
 Generate the theoretical XRD pattern (top peaks and intensities) for any material:
 ```bash
 matgraph xrd LiFePO4
 ```
 
-**2. Universal Interatomic Potentials (M3GNet)**
+**3. Universal Interatomic Potentials (M3GNet)**
 Use the M3GNet architecture to predict structural energy, forces, and stresses:
 ```bash
 matgraph predict LiFePO4 --model m3gnet
 ```
 
-**3. Analytics & Model Evaluation**
+**4. Analytics & Model Evaluation**
 Evaluate the accuracy (MAE) of a specific architecture against true scientific data:
 ```bash
 matgraph evaluate LiFePO4 --model megnet
 ```
 
-**4. Advanced Search & Filtering**
+**5. Advanced Search & Filtering**
 Filter materials based on physical constraints:
 ```bash
 matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic --model megnet
 ```
 
-**5. Structure & Dataset Export for ML Engineers**
+**6. Structure & Dataset Export for ML Engineers**
 Save extracted predictions directly to a dataset (CSV/JSON), and export 3D `.cif` files for offline processing:
 ```bash
 matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv --cif

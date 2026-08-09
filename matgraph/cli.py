@@ -183,9 +183,9 @@ def evaluate(formula: str, model: str = typer.Option("cgcnn", "--model", help="M
         form_errors = []
         
         for r in results:
-            if r["true_band_gap"] is not None:
+            if r.get("true_band_gap") is not None and r.get("predicted_band_gap") is not None:
                 gap_errors.append(abs(r["true_band_gap"] - r["predicted_band_gap"]))
-            if r["true_form_energy"] is not None:
+            if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None:
                 form_errors.append(abs(r["true_form_energy"] - r["predicted_form_energy"]))
                 
         gap_mae = sum(gap_errors) / len(gap_errors) if gap_errors else 0.0
@@ -193,11 +193,52 @@ def evaluate(formula: str, model: str = typer.Option("cgcnn", "--model", help="M
         
         console.print(f"\n[bold magenta]Model Analytics Report ({model.upper()})[/bold magenta]")
         console.print(f"Total Samples Evaluated: {len(results)}")
-        console.print(f"Band Gap MAE: [bold yellow]{gap_mae:.3f} eV[/bold yellow]")
-        console.print(f"Formation Energy MAE: [bold yellow]{form_mae:.3f} eV/atom[/bold yellow]\n")
+        if gap_errors:
+            console.print(f"Band Gap MAE: [bold yellow]{gap_mae:.3f} eV[/bold yellow]")
+        if form_errors:
+            console.print(f"Formation Energy MAE: [bold yellow]{form_mae:.3f} eV/atom[/bold yellow]\n")
         
     except Exception as e:
         console.print(f"[red]Evaluation Error: {e}[/red]")
+
+@app.command()
+def substitute(formula: str, elem_out: str, elem_in: str):
+    """
+    (GNoME-inspired) Perform hypothetical elemental substitution to predict stability of a new material.
+    e.g., matgraph substitute LiFePO4 Li Na
+    """
+    from matgraph.core import substitute_material
+    api_key = os.environ.get("MP_API_KEY")
+    if not api_key:
+        console.print("[red]Error: MP_API_KEY is not set.[/red]")
+        raise typer.Exit(code=1)
+        
+    console.print(f"[cyan]Generative Discovery: Substituting {elem_out} with {elem_in} in {formula}...[/cyan]")
+    try:
+        res = substitute_material(formula, elem_out, elem_in, api_key)
+        
+        table = Table(title=f"Thermodynamic Stability Analysis")
+        table.add_column("Material", style="magenta")
+        table.add_column("Predicted Energy (M3GNet)", style="blue")
+        table.add_column("Status", style="bold")
+        
+        o_energy = res['original']['energy']
+        h_energy = res['hypothetical']['energy']
+        
+        table.add_row(res['original']['formula'] + " (Baseline)", f"{o_energy:.3f} eV", "[green]Known[/green]")
+        
+        status_color = "[bold green]Stable Candidate[/bold green]" if res['is_more_stable'] else "[bold red]Likely Unstable[/bold red]"
+        table.add_row(res['hypothetical']['formula'] + " (Generated)", f"{h_energy:.3f} eV", status_color)
+        
+        console.print(table)
+        
+        if res['is_more_stable']:
+            console.print(f"\n🎉 [bold green]Discovery![/bold green] The hypothetical material {res['hypothetical']['formula']} is predicted to be thermodynamically MORE stable than the baseline!")
+        else:
+            console.print(f"\n[yellow]Analysis:[/yellow] The substitution increases internal energy. {res['hypothetical']['formula']} might decompose.")
+            
+    except Exception as e:
+        console.print(f"[red]Substitution Error: {e}[/red]")
 
 @app.command()
 def serve(port: int = 8000):
