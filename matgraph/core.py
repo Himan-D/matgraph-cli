@@ -3,6 +3,7 @@ import json
 import csv
 from typing import Optional, Tuple, List
 from mp_api.client import MPRester
+from matgraph.cdn import cache_get, cache_put
 
 def fetch_materials_data(
     formula: str, 
@@ -10,7 +11,7 @@ def fetch_materials_data(
     band_gap_range: Optional[Tuple[float, float]] = None,
     crystal_system: Optional[str] = None
 ):
-    """Fetch material data from Materials Project with advanced filters."""
+    """Fetch material data from Materials Project with CDN caching."""
     search_kwargs = {
         "formula": formula,
         "fields": ["material_id", "formula_pretty", "structure", "band_gap", "formation_energy_per_atom", "density", "symmetry"]
@@ -114,6 +115,11 @@ def substitute_material(formula: str, elem_out: str, elem_in: str, api_key: str)
     }
 
 def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, model: str = "cgcnn"):
+    # Check CDN cache first
+    cached = cache_get("pipeline", formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=model)
+    if cached is not None:
+        return cached
+
     docs = fetch_materials_data(formula, api_key)
     
     if min_gap is not None or max_gap is not None:
@@ -159,7 +165,14 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
             "model_used": model.upper(),
             "structure": doc.structure
         })
-        
+
+    # Write results to CDN cache (local + S3)
+    serializable = []
+    for r in results:
+        row = {k: v for k, v in r.items() if k != "structure"}
+        serializable.append(row)
+    cache_put("pipeline", serializable, formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=model)
+
     return results
 
 def save_results(results: List[dict], output_file: str, file_format: str):
