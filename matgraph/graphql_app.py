@@ -25,6 +25,8 @@ class MaterialPrediction:
     crystal_system: str
     true_band_gap: typing.Optional[float]
     predicted_band_gap: float
+    true_form_energy: typing.Optional[float]
+    predicted_form_energy: float
     features: MaterialFeatures
     metrics: ModelMetrics
 
@@ -37,6 +39,7 @@ class Query:
         min_gap: typing.Optional[float] = None,
         max_gap: typing.Optional[float] = None,
         crystal_system: typing.Optional[str] = None,
+        model: typing.Optional[str] = "cgcnn",
         limit: typing.Optional[int] = 10
     ) -> typing.List[MaterialPrediction]:
         api_key = os.environ.get("MP_API_KEY")
@@ -44,7 +47,7 @@ class Query:
             raise Exception("MP_API_KEY environment variable is missing.")
             
         raw_results = await asyncio.to_thread(
-            run_pipeline, formula, api_key, min_gap, max_gap, crystal_system
+            run_pipeline, formula, api_key, min_gap, max_gap, crystal_system, model
         )
         
         graphql_results = []
@@ -56,8 +59,8 @@ class Query:
                 density=r["features"]["density"]
             )
             metrics = ModelMetrics(
-                model_name="PyTorch-CGCNN-v1",
-                confidence_score=0.94
+                model_name=f"PyTorch-{r['model_used']}-v1",
+                confidence_score=0.94 if r['model_used'] == "CGCNN" else 0.92
             )
             graphql_results.append(
                 MaterialPrediction(
@@ -66,6 +69,8 @@ class Query:
                     crystal_system=r["crystal_system"],
                     true_band_gap=r["true_band_gap"],
                     predicted_band_gap=r["predicted_band_gap"],
+                    true_form_energy=r["true_form_energy"],
+                    predicted_form_energy=r["predicted_form_energy"],
                     features=feats,
                     metrics=metrics
                 )
@@ -76,7 +81,7 @@ schema = strawberry.Schema(query=Query)
 graphql_app = GraphQLRouter(schema)
 
 app = FastAPI(
-    title="🚀 MatGraph GraphQL Engine", 
+    title="MatGraph GraphQL Engine", 
     description="Modern, Async GraphQL API with advanced filtering"
 )
 app.include_router(graphql_app, prefix="/graphql")

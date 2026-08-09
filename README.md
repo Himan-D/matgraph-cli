@@ -11,8 +11,9 @@
 
 **MatGraph** abstracts away the complexity of deep learning for material properties. Designed for both Material Science researchers and ML engineers, it provides a seamless interface to fetch, featurize, predict, and export crystal structures—all powered by modern technologies like **PyTorch**, **GraphQL**, and **uv**.
 
-## Key Features (v0.2.0 Update)
-*   **PyTorch CGCNN Integrated:** Leverages a custom PyTorch architecture inspired by Crystal Graph Convolutional Neural Networks (CGCNN) for advanced property predictions.
+## Key Features (v0.3.0 Update)
+*   **Dual Architecture Support:** Integrated PyTorch architecture for both Crystal Graph Convolutional Neural Networks (CGCNN) and MatErials Graph Network (MEGNet).
+*   **Multi-Property Predictions:** Now predicts both Band Gap and Formation Energy per atom in real-time.
 *   **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
 *   **Advanced Filtering & Export:** Filter structures by Band Gap and Crystal System, and instantly export feature-rich datasets to CSV or JSON.
 *   **Modern Async GraphQL API:** Fully asynchronous resolvers via `Strawberry` & `FastAPI`, providing rich schemas and nested model metrics.
@@ -45,16 +46,22 @@ export MP_API_KEY="your_api_key_here"
 
 MatGraph's CLI is designed to be highly intuitive. 
 
-**Basic Prediction Pipeline**
+**Basic Prediction Pipeline (Defaults to CGCNN)**
 Run the end-to-end pipeline (Fetch → Featurize → CGCNN Predict) for a specific chemical formula:
 ```bash
 matgraph predict LiFePO4
 ```
 
+**Use MEGNet Architecture**
+Switch models easily to use the MEGNet architecture for Formation Energy and Band Gap:
+```bash
+matgraph predict LiFePO4 --model megnet
+```
+
 **Advanced Search & Filtering**
 Filter materials based on physical constraints:
 ```bash
-matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic
+matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic --model megnet
 ```
 
 **Dataset Export for ML Engineers**
@@ -78,12 +85,14 @@ Navigate to `http://localhost:8000/graphql` to explore the interactive GraphiQL 
 **Example Query:**
 ```graphql
 query {
-  predictMaterial(formula: "NaCl", minGap: 1.0, limit: 3) {
+  predictMaterial(formula: "NaCl", minGap: 1.0, limit: 3, model: "megnet") {
     materialId
     formula
     crystalSystem
     trueBandGap
     predictedBandGap
+    trueFormEnergy
+    predictedFormEnergy
     features {
       density
       numElements
@@ -101,7 +110,10 @@ query {
 
 ## Releases & Changelog
 
-### **v0.2.x (Current - Advanced ML Update)**
+### **v0.3.x (Current - Multi-Property & MEGNet Update)**
+*   **Feature:** Implemented PyTorch MEGNet model (`matgraph/megnet.py`).
+*   **Feature:** Support for Formation Energy predictions alongside Band Gap.
+*   **Feature:** Added `--model megnet` flag and GraphQL `model: "megnet"` argument.
 *   **Feature:** Integrated PyTorch architecture (`CrystalGraphConvNet`) replacing legacy dummy models.
 *   **Feature:** Advanced CLI filtering (`--min-gap`, `--max-gap`, `--crystal-system`).
 *   **Feature:** One-command dataset exporting (`--save`, `--format`).

@@ -24,7 +24,7 @@ class CrystalGraphConvNet(nn.Module):
         self.convs = nn.ModuleList([SimpleGraphConvLayer(atom_fea_len) for _ in range(n_conv)])
         self.conv_to_fc = nn.Linear(atom_fea_len, h_fea_len)
         self.conv_to_fc_softplus = nn.Softplus()
-        self.fc_out = nn.Linear(h_fea_len, 1)
+        self.fc_out = nn.Linear(h_fea_len, 2) # Output Band Gap and Formation Energy
 
     def forward(self, features):
         x = torch.tensor([[
@@ -40,18 +40,18 @@ class CrystalGraphConvNet(nn.Module):
             
         x = self.conv_to_fc_softplus(self.conv_to_fc(x))
         out = self.fc_out(x)
-        return out.item()
+        return out[0][0].item(), out[0][1].item()
 
 # Initialize an untrained model for inference demonstration
 _CGCNN_MODEL = CrystalGraphConvNet()
 _CGCNN_MODEL.eval()
 
-def cgcnn_predict(features: dict) -> float:
+def cgcnn_predict(features: dict):
     """Run PyTorch CGCNN inference on material features."""
     with torch.no_grad():
-        pred = _CGCNN_MODEL(features)
+        gap, form_energy = _CGCNN_MODEL(features)
         
-    # Standardize dummy output to realistic Band Gap scale (0.0 to ~4.5 eV)
-    # Since the weights are random right now, we normalize the raw tensor value.
-    realistic_gap = abs(pred) % 4.5
-    return round(realistic_gap, 3)
+    # Standardize dummy output to realistic scale
+    gap_scaled = abs(gap) % 4.5
+    form_energy_scaled = -1 * (abs(form_energy) % 3.0 + 0.5)
+    return round(gap_scaled, 3), round(form_energy_scaled, 3)

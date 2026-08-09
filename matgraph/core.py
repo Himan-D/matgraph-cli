@@ -19,8 +19,6 @@ def fetch_materials_data(
     if band_gap_range:
         search_kwargs["band_gap"] = band_gap_range
     if crystal_system:
-        # MP API expects CrystalSystem enum, but string usually works if properly formatted.
-        # Often mapped as kwargs for symmetry parameters. We pass crystal_system strictly.
         search_kwargs["crystal_system"] = crystal_system
 
     with MPRester(api_key) as mpr:
@@ -38,13 +36,15 @@ def extract_features(structure):
     }
 
 from matgraph.cgcnn import cgcnn_predict
+from matgraph.megnet import megnet_predict
 
 def run_pipeline(
     formula: str, 
     api_key: str,
     min_gap: Optional[float] = None,
     max_gap: Optional[float] = None,
-    crystal_system: Optional[str] = None
+    crystal_system: Optional[str] = None,
+    model: str = "cgcnn"
 ):
     """Orchestrates the entire Fetch, Filter, Featurize, and Predict pipeline."""
     band_gap_range = None
@@ -63,9 +63,12 @@ def run_pipeline(
             continue
             
         features = extract_features(doc.structure)
-        prediction = cgcnn_predict(features)
         
-        # Ensure robust retrieval of crystal system
+        if model.lower() == "megnet":
+            pred_gap, pred_form_energy = megnet_predict(features)
+        else:
+            pred_gap, pred_form_energy = cgcnn_predict(features)
+        
         c_sys = "Unknown"
         if doc.symmetry and hasattr(doc.symmetry, "crystal_system"):
             c_sys = doc.symmetry.crystal_system.name if hasattr(doc.symmetry.crystal_system, 'name') else str(doc.symmetry.crystal_system)
@@ -74,9 +77,12 @@ def run_pipeline(
             "material_id": str(doc.material_id),
             "formula": doc.formula_pretty,
             "true_band_gap": doc.band_gap,
-            "predicted_band_gap": prediction,
+            "predicted_band_gap": pred_gap,
+            "true_form_energy": doc.formation_energy_per_atom,
+            "predicted_form_energy": pred_form_energy,
             "crystal_system": c_sys,
-            "features": features
+            "features": features,
+            "model_used": model.upper()
         })
         
     return results
@@ -89,7 +95,7 @@ def save_results(results: List[dict], output_file: str, file_format: str):
     elif file_format == "csv":
         if not results:
             return
-        keys = ["material_id", "formula", "crystal_system", "true_band_gap", "predicted_band_gap", "density", "volume"]
+        keys = ["material_id", "formula", "crystal_system", "true_band_gap", "predicted_band_gap", "true_form_energy", "predicted_form_energy", "density", "volume"]
         with open(output_file, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=keys)
             writer.writeheader()
@@ -100,6 +106,8 @@ def save_results(results: List[dict], output_file: str, file_format: str):
                     "crystal_system": r["crystal_system"],
                     "true_band_gap": r["true_band_gap"],
                     "predicted_band_gap": r["predicted_band_gap"],
+                    "true_form_energy": r["true_form_energy"],
+                    "predicted_form_energy": r["predicted_form_energy"],
                     "density": r["features"]["density"],
                     "volume": r["features"]["volume"],
                 }
