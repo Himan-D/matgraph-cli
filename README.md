@@ -113,15 +113,31 @@ print(f"MAE: {metrics['band_gap_mae']}")
 
 ## Usage: The Modern GraphQL API
 
-Integrate MatGraph into your own web applications seamlessly using our robust, async GraphQL engine.
+Integrate MatGraph into your own web applications seamlessly using our robust, async GraphQL engine. **Note:** The API is now secured with an API Key mechanism.
 
-**Start the Server:**
+### Start the Server:
 ```bash
-matgraph serve --port 8000
+uvicorn matgraph.graphql_app:app --reload
 ```
+
+### Security (API Key)
+You must pass the `x-api-key` header with your requests. By default, the key is `matgraph_secret_2026`.
+You can change this by setting the `MATGRAPH_API_KEY` environment variable on your server.
+
+```bash
+export MATGRAPH_API_KEY="my_super_secret_key"
+```
+
+### Sample Query (cURL):
+```bash
+curl -X POST http://localhost:8000/graphql \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: matgraph_secret_2026" \
+  -d '{"query": "query { predictMaterial(formula: \"LiFePO4\") { predictedFormEnergy } }"}'
+```
+
 Navigate to `http://localhost:8000/graphql` to explore the interactive GraphiQL playground.
 
-**Example Query:**
 ```graphql
 query {
   predictMaterial(formula: "NaCl", minGap: 1.0, limit: 3, model: "megnet") {
