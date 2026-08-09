@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>🔬 MatGraph</h1>
+  <h1>MatGraph</h1>
   <p><strong>The modern, end-to-end Material Science Deep Learning Pipeline & GraphQL API</strong></p>
   
   [![PyPI - Version](https://img.shields.io/pypi/v/matgraph-cli?color=blue)](https://pypi.org/project/matgraph-cli/)
@@ -11,16 +11,16 @@
 
 **MatGraph** abstracts away the complexity of deep learning for material properties. Designed for both Material Science researchers and ML engineers, it provides a seamless interface to fetch, featurize, predict, and export crystal structures—all powered by modern technologies like **PyTorch**, **GraphQL**, and **uv**.
 
-## ✨ Key Features (v0.2.0 Update)
-*   🧠 **PyTorch CGCNN Integrated:** Leverages a custom PyTorch architecture inspired by Crystal Graph Convolutional Neural Networks (CGCNN) for advanced property predictions.
-*   ⚡ **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
-*   📊 **Advanced Filtering & Export:** Filter structures by Band Gap and Crystal System, and instantly export feature-rich datasets to CSV or JSON.
-*   🌐 **Modern Async GraphQL API:** Fully asynchronous resolvers via `Strawberry` & `FastAPI`, providing rich schemas and nested model metrics.
-*   💻 **Sleek CLI:** Beautiful, table-formatted terminal outputs powered by `Typer` and `Rich`.
+## Key Features (v0.2.0 Update)
+*   **PyTorch CGCNN Integrated:** Leverages a custom PyTorch architecture inspired by Crystal Graph Convolutional Neural Networks (CGCNN) for advanced property predictions.
+*   **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
+*   **Advanced Filtering & Export:** Filter structures by Band Gap and Crystal System, and instantly export feature-rich datasets to CSV or JSON.
+*   **Modern Async GraphQL API:** Fully asynchronous resolvers via `Strawberry` & `FastAPI`, providing rich schemas and nested model metrics.
+*   **Sleek CLI:** Beautiful, table-formatted terminal outputs powered by `Typer` and `Rich`.
 
 ---
 
-## 🚀 Installation
+## Installation
 
 We recommend using [**uv**](https://github.com/astral-sh/uv) for the fastest installation experience.
 
@@ -41,7 +41,7 @@ export MP_API_KEY="your_api_key_here"
 
 ---
 
-## 🛠️ Usage: The Productive CLI
+## Usage: The Productive CLI
 
 MatGraph's CLI is designed to be highly intuitive. 
 
@@ -65,7 +65,7 @@ matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv
 
 ---
 
-## 🌐 Usage: The Modern GraphQL API
+## Usage: The Modern GraphQL API
 
 Integrate MatGraph into your own web applications seamlessly using our robust, async GraphQL engine.
 
@@ -99,7 +99,7 @@ query {
 
 ---
 
-## 📦 Releases & Changelog
+## Releases & Changelog
 
 ### **v0.2.x (Current - Advanced ML Update)**
 *   **Feature:** Integrated PyTorch architecture (`CrystalGraphConvNet`) replacing legacy dummy models.
@@ -114,7 +114,7 @@ query {
 
 ---
 
-## 🤝 Contributing & Architecture
+## Contributing & Architecture
 MatGraph is built on a robust, modern Python stack:
 *   **ML & Science:** PyTorch, PyMatGen, Scikit-Learn, MP-API
 *   **API & CLI:** FastAPI, Strawberry GraphQL, Typer, Rich
