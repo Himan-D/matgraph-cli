@@ -38,41 +38,55 @@ def extract_features(structure):
 from matgraph.cgcnn import cgcnn_predict
 from matgraph.megnet import megnet_predict
 
-def run_pipeline(
-    formula: str, 
-    api_key: str,
-    min_gap: Optional[float] = None,
-    max_gap: Optional[float] = None,
-    crystal_system: Optional[str] = None,
-    model: str = "cgcnn"
-):
-    """Orchestrates the entire Fetch, Filter, Featurize, and Predict pipeline."""
-    band_gap_range = None
-    if min_gap is not None or max_gap is not None:
-        band_gap_range = (min_gap or 0.0, max_gap or 100.0)
+def m3gnet_predict(features):
+    from matgraph.m3gnet import M3GNet
+    model = M3GNet()
+    model.eval()
+    import torch
+    with torch.no_grad():
+        return model(features)
 
-    docs = fetch_materials_data(
-        formula, api_key, 
-        band_gap_range=band_gap_range, 
-        crystal_system=crystal_system
-    )
+def simulate_xrd(structure):
+    from pymatgen.analysis.diffraction.xrd import XRDCalculator
+    xrd_calc = XRDCalculator(wavelength="CuKa")
+    pattern = xrd_calc.get_pattern(structure)
+    return {
+        "two_theta": pattern.x.tolist(),
+        "intensity": pattern.y.tolist(),
+        "hkls": [[hkl[0] for hkl in hkls] for hkls in pattern.hkls]
+    }
+
+def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, model: str = "cgcnn"):
+    docs = fetch_materials_data(formula, api_key)
     
+    if min_gap is not None or max_gap is not None:
+        docs = [d for d in docs if d.band_gap is not None]
+        if min_gap is not None:
+            docs = [d for d in docs if d.band_gap >= min_gap]
+        if max_gap is not None:
+            docs = [d for d in docs if d.band_gap <= max_gap]
+            
+    if crystal_system is not None:
+        docs = [d for d in docs if d.symmetry and d.symmetry.crystal_system.name.lower() == crystal_system.lower()]
+        
     results = []
     for doc in docs:
         if not doc.structure:
             continue
             
+        c_sys = doc.symmetry.crystal_system.name if doc.symmetry else "Unknown"
         features = extract_features(doc.structure)
+        
+        pred_gap, pred_form_energy = None, None
+        energy, forces, stresses = None, None, None
         
         if model.lower() == "megnet":
             pred_gap, pred_form_energy = megnet_predict(features)
+        elif model.lower() == "m3gnet":
+            energy, forces, stresses = m3gnet_predict(features)
         else:
             pred_gap, pred_form_energy = cgcnn_predict(features)
-        
-        c_sys = "Unknown"
-        if doc.symmetry and hasattr(doc.symmetry, "crystal_system"):
-            c_sys = doc.symmetry.crystal_system.name if hasattr(doc.symmetry.crystal_system, 'name') else str(doc.symmetry.crystal_system)
-        
+            
         results.append({
             "material_id": str(doc.material_id),
             "formula": doc.formula_pretty,
@@ -80,6 +94,9 @@ def run_pipeline(
             "predicted_band_gap": pred_gap,
             "true_form_energy": doc.formation_energy_per_atom,
             "predicted_form_energy": pred_form_energy,
+            "m3gnet_energy": energy,
+            "m3gnet_forces": forces,
+            "m3gnet_stresses": stresses,
             "crystal_system": c_sys,
             "features": features,
             "model_used": model.upper(),

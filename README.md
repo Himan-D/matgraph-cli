@@ -11,14 +11,13 @@
 
 **MatGraph** abstracts away the complexity of deep learning for material properties. Designed for both Material Science researchers and ML engineers, it provides a seamless interface to fetch, featurize, predict, and export crystal structures—all powered by modern technologies like **PyTorch**, **GraphQL**, and **uv**.
 
-## Key Features (v0.4.0 Update)
-*   **Analytics & Evaluation:** New `evaluate` command computes Mean Absolute Error (MAE) comparing PyTorch predictions directly against Materials Project ground truth.
-*   **Raw Structure Export:** Automatically export raw 3D crystal structures to standard `.cif` (Crystallographic Information File) formats.
-*   **Dual Architecture Support:** Integrated PyTorch architecture for both Crystal Graph Convolutional Neural Networks (CGCNN) and MatErials Graph Network (MEGNet).
-*   **Multi-Property Predictions:** Now predicts both Band Gap and Formation Energy per atom in real-time.
+## Key Features (v0.5.0 Update)
+*   **Universal Interatomic Potentials (M3GNet):** New `m3gnet` architecture for predicting Energy, Forces, and Stresses using simulated 3-body interactions.
+*   **X-Ray Diffraction (XRD) Simulator:** Generate synthetic Cu-Kα XRD patterns directly from the CLI to identify material peaks.
+*   **Analytics & Evaluation:** `evaluate` command computes Mean Absolute Error (MAE) comparing PyTorch predictions directly against Materials Project ground truth.
+*   **Raw Structure Export:** Automatically export raw 3D crystal structures to standard `.cif` formats.
+*   **Multi-Architecture Support:** Seamlessly switch between CGCNN, MEGNet, and M3GNet models.
 *   **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
-*   **Modern Async GraphQL API:** Fully asynchronous resolvers via `Strawberry` & `FastAPI`, providing rich schemas and nested model metrics.
-*   **Sleek CLI:** Beautiful, table-formatted terminal outputs powered by `Typer` and `Rich`.
 
 ---
 
@@ -39,7 +38,6 @@ To fetch high-fidelity data, you need a free API key from the [Materials Project
 ```bash
 export MP_API_KEY="your_api_key_here"
 ```
-*Tip: You can verify your setup anytime by running `matgraph setup <YOUR_KEY>`.*
 
 ---
 
@@ -47,22 +45,22 @@ export MP_API_KEY="your_api_key_here"
 
 MatGraph's CLI is designed to be highly intuitive. 
 
-**1. Analytics & Model Evaluation**
+**1. X-Ray Diffraction (XRD) Simulation**
+Generate the theoretical XRD pattern (top peaks and intensities) for any material:
+```bash
+matgraph xrd LiFePO4
+```
+
+**2. Universal Interatomic Potentials (M3GNet)**
+Use the M3GNet architecture to predict structural energy, forces, and stresses:
+```bash
+matgraph predict LiFePO4 --model m3gnet
+```
+
+**3. Analytics & Model Evaluation**
 Evaluate the accuracy (MAE) of a specific architecture against true scientific data:
 ```bash
 matgraph evaluate LiFePO4 --model megnet
-```
-
-**2. Basic Prediction Pipeline (Defaults to CGCNN)**
-Run the end-to-end pipeline (Fetch → Featurize → Predict) for a specific chemical formula:
-```bash
-matgraph predict LiFePO4
-```
-
-**3. Use MEGNet Architecture**
-Switch models easily to use the MEGNet architecture for Formation Energy and Band Gap:
-```bash
-matgraph predict LiFePO4 --model megnet
 ```
 
 **4. Advanced Search & Filtering**
@@ -72,7 +70,7 @@ matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic --model megnet
 ```
 
 **5. Structure & Dataset Export for ML Engineers**
-Save extracted predictions directly to a dataset (CSV/JSON), and optionally export the 3D `.cif` files for offline processing:
+Save extracted predictions directly to a dataset (CSV/JSON), and export 3D `.cif` files for offline processing:
 ```bash
 matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv --cif
 ```

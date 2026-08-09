@@ -54,22 +54,36 @@ def predict(
         table = Table(title=f"Prediction Results for {formula} ({model.upper()})")
         table.add_column("ID", style="cyan")
         table.add_column("Formula", style="magenta")
-        table.add_column("True Gap (eV)", style="green")
-        table.add_column("Pred Gap", style="bold blue")
-        table.add_column("True Form (eV)", style="green")
-        table.add_column("Pred Form", style="bold blue")
+        
+        if model.lower() == "m3gnet":
+            table.add_column("Energy (eV)", style="bold blue")
+            table.add_column("Max Force", style="green")
+            table.add_column("Crystal Sys", style="yellow")
+        else:
+            table.add_column("True Gap (eV)", style="green")
+            table.add_column("Pred Gap", style="bold blue")
+            table.add_column("True Form (eV)", style="green")
+            table.add_column("Pred Form", style="bold blue")
         
         for r in results:
-            true_form = str(round(r["true_form_energy"], 3)) if r["true_form_energy"] is not None else "N/A"
-            true_gap = str(round(r["true_band_gap"], 3)) if r["true_band_gap"] is not None else "N/A"
-            table.add_row(
-                str(r["material_id"]).replace("mp-", ""),
-                r["formula"],
-                true_gap,
-                str(r["predicted_band_gap"]),
-                true_form,
-                str(r["predicted_form_energy"])
-            )
+            if model.lower() == "m3gnet":
+                energy = f"{r['m3gnet_energy']:.3f}" if r['m3gnet_energy'] is not None else "N/A"
+                max_force = f"{max(r['m3gnet_forces']):.3f}" if r['m3gnet_forces'] else "N/A"
+                table.add_row(str(r["material_id"]).replace("mp-", ""), r["formula"], energy, max_force, r["crystal_system"])
+            else:
+                true_form = str(round(r["true_form_energy"], 3)) if r["true_form_energy"] is not None else "N/A"
+                true_gap = str(round(r["true_band_gap"], 3)) if r["true_band_gap"] is not None else "N/A"
+                pred_gap = str(round(r["predicted_band_gap"], 3)) if r["predicted_band_gap"] is not None else "N/A"
+                pred_form = str(round(r["predicted_form_energy"], 3)) if r["predicted_form_energy"] is not None else "N/A"
+                
+                table.add_row(
+                    str(r["material_id"]).replace("mp-", ""),
+                    r["formula"],
+                    true_gap,
+                    pred_gap,
+                    true_form,
+                    pred_form
+                )
             
             if cif and r.get("structure"):
                 cif_filename = f"{r['material_id']}_{r['formula']}.cif"
@@ -85,6 +99,48 @@ def predict(
 
     except Exception as e:
         console.print(f"[red]Pipeline Error: {e}[/red]")
+
+@app.command()
+def xrd(formula: str):
+    """Simulate X-Ray Diffraction (XRD) patterns for materials."""
+    from matgraph.core import fetch_materials_data, simulate_xrd
+    api_key = os.environ.get("MP_API_KEY")
+    if not api_key:
+        console.print("[red]Error: MP_API_KEY is not set.[/red]")
+        raise typer.Exit(code=1)
+        
+    console.print(f"[cyan]Fetching structures and simulating XRD for {formula}...[/cyan]")
+    try:
+        docs = fetch_materials_data(formula, api_key)
+        if not docs:
+            console.print("[yellow]No materials found.[/yellow]")
+            return
+            
+        # Simulate XRD for the best match
+        doc = docs[0]
+        if not doc.structure:
+            console.print("[red]No structure available to simulate XRD.[/red]")
+            return
+            
+        xrd_data = simulate_xrd(doc.structure)
+        
+        table = Table(title=f"XRD Peaks (Cu-Ka) for {doc.formula_pretty} ({doc.material_id})")
+        table.add_column("2θ (degrees)", justify="right", style="cyan")
+        table.add_column("Intensity (%)", justify="right", style="green")
+        table.add_column("hkl", style="magenta")
+        
+        # Display top 10 peaks
+        peaks = list(zip(xrd_data["two_theta"], xrd_data["intensity"], xrd_data["hkls"]))
+        peaks.sort(key=lambda x: x[1], reverse=True)
+        
+        for theta, intensity, hkl in peaks[:10]:
+            hkl_str = str(hkl[0]) # take the primary hkl family
+            table.add_row(f"{theta:.2f}", f"{intensity:.1f}", hkl_str)
+            
+        console.print(table)
+        console.print(f"[dim]Showing top 10 peaks. Use python API for full pattern export.[/dim]")
+    except Exception as e:
+        console.print(f"[red]XRD Error: {e}[/red]")
 
 @app.command()
 def evaluate(formula: str, model: str = typer.Option("cgcnn", "--model", help="Model to evaluate")):
