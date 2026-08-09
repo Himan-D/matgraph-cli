@@ -82,7 +82,8 @@ def run_pipeline(
             "predicted_form_energy": pred_form_energy,
             "crystal_system": c_sys,
             "features": features,
-            "model_used": model.upper()
+            "model_used": model.upper(),
+            "structure": doc.structure
         })
         
     return results

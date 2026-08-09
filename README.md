@@ -11,11 +11,12 @@
 
 **MatGraph** abstracts away the complexity of deep learning for material properties. Designed for both Material Science researchers and ML engineers, it provides a seamless interface to fetch, featurize, predict, and export crystal structures—all powered by modern technologies like **PyTorch**, **GraphQL**, and **uv**.
 
-## Key Features (v0.3.0 Update)
+## Key Features (v0.4.0 Update)
+*   **Analytics & Evaluation:** New `evaluate` command computes Mean Absolute Error (MAE) comparing PyTorch predictions directly against Materials Project ground truth.
+*   **Raw Structure Export:** Automatically export raw 3D crystal structures to standard `.cif` (Crystallographic Information File) formats.
 *   **Dual Architecture Support:** Integrated PyTorch architecture for both Crystal Graph Convolutional Neural Networks (CGCNN) and MatErials Graph Network (MEGNet).
 *   **Multi-Property Predictions:** Now predicts both Band Gap and Formation Energy per atom in real-time.
 *   **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
-*   **Advanced Filtering & Export:** Filter structures by Band Gap and Crystal System, and instantly export feature-rich datasets to CSV or JSON.
 *   **Modern Async GraphQL API:** Fully asynchronous resolvers via `Strawberry` & `FastAPI`, providing rich schemas and nested model metrics.
 *   **Sleek CLI:** Beautiful, table-formatted terminal outputs powered by `Typer` and `Rich`.
 
@@ -46,28 +47,34 @@ export MP_API_KEY="your_api_key_here"
 
 MatGraph's CLI is designed to be highly intuitive. 
 
-**Basic Prediction Pipeline (Defaults to CGCNN)**
-Run the end-to-end pipeline (Fetch → Featurize → CGCNN Predict) for a specific chemical formula:
+**1. Analytics & Model Evaluation**
+Evaluate the accuracy (MAE) of a specific architecture against true scientific data:
+```bash
+matgraph evaluate LiFePO4 --model megnet
+```
+
+**2. Basic Prediction Pipeline (Defaults to CGCNN)**
+Run the end-to-end pipeline (Fetch → Featurize → Predict) for a specific chemical formula:
 ```bash
 matgraph predict LiFePO4
 ```
 
-**Use MEGNet Architecture**
+**3. Use MEGNet Architecture**
 Switch models easily to use the MEGNet architecture for Formation Energy and Band Gap:
 ```bash
 matgraph predict LiFePO4 --model megnet
 ```
 
-**Advanced Search & Filtering**
+**4. Advanced Search & Filtering**
 Filter materials based on physical constraints:
 ```bash
 matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic --model megnet
 ```
 
-**Dataset Export for ML Engineers**
-Save extracted structural features and predictions directly into a dataset for offline training:
+**5. Structure & Dataset Export for ML Engineers**
+Save extracted predictions directly to a dataset (CSV/JSON), and optionally export the 3D `.cif` files for offline processing:
 ```bash
-matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv
+matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv --cif
 ```
 
 ---
