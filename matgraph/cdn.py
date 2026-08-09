@@ -1,158 +1,110 @@
 """
-AWS CloudFront CDN integration for MatGraph.
+Zero-config caching layer for MatGraph.
 
-Caches Materials Project API responses and model predictions on S3,
-served globally via CloudFront edge locations. This reduces API calls,
-speeds up repeated queries, and lowers latency for researchers worldwide.
+Uses Python's built-in sqlite3 for a fast, persistent, local cache.
+No external services, no credentials, no cost.
+Repeated queries return instantly without hitting the Materials Project API.
 
-Usage:
-    # Environment variables required:
-    #   AWS_ACCESS_KEY_ID
-    #   AWS_SECRET_ACCESS_KEY
-    #   AWS_REGION (default: us-east-1)
-    #   MATGRAPH_S3_BUCKET (default: matgraph-cdn-cache)
-    #   MATGRAPH_CDN_URL (your CloudFront distribution URL)
+Cache location: ~/.matgraph_cache/cache.db
+Default TTL: 1 hour (3600 seconds)
 """
 
 import os
 import json
 import hashlib
 import time
+import sqlite3
 from pathlib import Path
 from typing import Optional, Any
 
-LOCAL_CACHE_DIR = Path.home() / ".matgraph_cache"
+CACHE_DIR = Path.home() / ".matgraph_cache"
+CACHE_DB = CACHE_DIR / "cache.db"
+
+
+def _init_db() -> sqlite3.Connection:
+    """Initialize the SQLite cache database."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(CACHE_DB))
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS cache (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL,
+            created_at REAL NOT NULL
+        )
+    """)
+    conn.commit()
+    return conn
 
 
 def _get_cache_key(prefix: str, **kwargs) -> str:
     """Generate a deterministic cache key from query parameters."""
     raw = json.dumps(kwargs, sort_keys=True, default=str)
     digest = hashlib.sha256(raw.encode()).hexdigest()[:16]
-    return f"{prefix}/{digest}.json"
+    return f"{prefix}:{digest}"
 
-
-def _local_cache_path(cache_key: str) -> Path:
-    path = LOCAL_CACHE_DIR / cache_key
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def _is_local_fresh(path: Path, ttl_seconds: int = 3600) -> bool:
-    """Check if local cache file exists and is within TTL."""
-    if not path.exists():
-        return False
-    age = time.time() - path.stat().st_mtime
-    return age < ttl_seconds
-
-
-# ---------------------------------------------------------------------------
-# Local-only cache (works without AWS credentials)
-# ---------------------------------------------------------------------------
-
-def local_get(cache_key: str, ttl: int = 3600) -> Optional[Any]:
-    """Retrieve from local disk cache."""
-    path = _local_cache_path(cache_key)
-    if _is_local_fresh(path, ttl):
-        with open(path, "r") as f:
-            return json.load(f)
-    return None
-
-
-def local_put(cache_key: str, data: Any):
-    """Write to local disk cache."""
-    path = _local_cache_path(cache_key)
-    with open(path, "w") as f:
-        json.dump(data, f)
-
-
-# ---------------------------------------------------------------------------
-# S3 + CloudFront layer (optional, requires boto3 + AWS creds)
-# ---------------------------------------------------------------------------
-
-def _get_s3_client():
-    try:
-        import boto3
-    except ImportError:
-        return None
-
-    region = os.environ.get("AWS_REGION", "us-east-1")
-    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-
-    if not access_key or not secret_key:
-        return None
-
-    return boto3.client(
-        "s3",
-        region_name=region,
-        aws_access_key_id=access_key,
-        aws_secret_access_key=secret_key,
-    )
-
-
-def _bucket() -> str:
-    return os.environ.get("MATGRAPH_S3_BUCKET", "matgraph-cdn-cache")
-
-
-def cdn_url() -> Optional[str]:
-    return os.environ.get("MATGRAPH_CDN_URL")
-
-
-def s3_get(cache_key: str) -> Optional[Any]:
-    """Retrieve a cached object from S3."""
-    s3 = _get_s3_client()
-    if s3 is None:
-        return None
-    try:
-        obj = s3.get_object(Bucket=_bucket(), Key=cache_key)
-        return json.loads(obj["Body"].read().decode("utf-8"))
-    except Exception:
-        return None
-
-
-def s3_put(cache_key: str, data: Any):
-    """Upload a cached object to S3 (auto-served via CloudFront)."""
-    s3 = _get_s3_client()
-    if s3 is None:
-        return
-    try:
-        s3.put_object(
-            Bucket=_bucket(),
-            Key=cache_key,
-            Body=json.dumps(data).encode("utf-8"),
-            ContentType="application/json",
-        )
-    except Exception:
-        pass  # Fail silently; caching is best-effort
-
-
-# ---------------------------------------------------------------------------
-# Unified cache interface (local -> S3/CDN -> origin)
-# ---------------------------------------------------------------------------
 
 def cache_get(prefix: str, ttl: int = 3600, **kwargs) -> Optional[Any]:
     """
-    Try local cache first, then S3/CDN.
-    Returns None on miss so caller can fetch from origin.
+    Retrieve cached result if it exists and is within TTL.
+    Returns None on cache miss.
     """
     key = _get_cache_key(prefix, **kwargs)
+    try:
+        conn = _init_db()
+        row = conn.execute(
+            "SELECT value, created_at FROM cache WHERE key = ?", (key,)
+        ).fetchone()
+        conn.close()
 
-    # 1. Local disk
-    hit = local_get(key, ttl)
-    if hit is not None:
-        return hit
+        if row is None:
+            return None
 
-    # 2. S3 / CloudFront
-    hit = s3_get(key)
-    if hit is not None:
-        local_put(key, hit)  # backfill local
-        return hit
+        value, created_at = row
+        if (time.time() - created_at) > ttl:
+            return None  # expired
 
-    return None
+        return json.loads(value)
+    except Exception:
+        return None
 
 
 def cache_put(prefix: str, data: Any, **kwargs):
-    """Write to both local and S3 caches."""
+    """Write result to cache."""
     key = _get_cache_key(prefix, **kwargs)
-    local_put(key, data)
-    s3_put(key, data)
+    try:
+        conn = _init_db()
+        conn.execute(
+            "INSERT OR REPLACE INTO cache (key, value, created_at) VALUES (?, ?, ?)",
+            (key, json.dumps(data, default=str), time.time()),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # caching is best-effort, never break the pipeline
+
+
+def cache_clear():
+    """Clear the entire cache."""
+    try:
+        conn = _init_db()
+        conn.execute("DELETE FROM cache")
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
+
+def cache_stats() -> dict:
+    """Return cache statistics."""
+    try:
+        conn = _init_db()
+        total = conn.execute("SELECT COUNT(*) FROM cache").fetchone()[0]
+        size_bytes = CACHE_DB.stat().st_size if CACHE_DB.exists() else 0
+        conn.close()
+        return {
+            "entries": total,
+            "size_mb": round(size_bytes / (1024 * 1024), 2),
+            "location": str(CACHE_DB),
+        }
+    except Exception:
+        return {"entries": 0, "size_mb": 0, "location": str(CACHE_DB)}

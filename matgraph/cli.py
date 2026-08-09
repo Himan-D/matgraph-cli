@@ -13,8 +13,26 @@ import importlib.metadata
 
 app = typer.Typer(help="MatGraph CLI: Deep Learning for Material Science", no_args_is_help=True)
 api_app = typer.Typer(help="Manage API keys for the GraphQL Server")
+cache_app = typer.Typer(help="Manage the local query cache")
 app.add_typer(api_app, name="auth")
+app.add_typer(cache_app, name="cache")
 console = Console()
+
+@cache_app.command("stats")
+def cache_stats_cmd():
+    """Show cache size and entry count."""
+    from matgraph.cdn import cache_stats
+    stats = cache_stats()
+    console.print(f"Entries: [bold cyan]{stats['entries']}[/bold cyan]")
+    console.print(f"Size: [bold cyan]{stats['size_mb']} MB[/bold cyan]")
+    console.print(f"Location: [bold]{stats['location']}[/bold]")
+
+@cache_app.command("clear")
+def cache_clear_cmd():
+    """Clear all cached query results."""
+    from matgraph.cdn import cache_clear
+    cache_clear()
+    console.print("[bold green]Cache cleared.[/bold green]")
 
 @api_app.command("generate")
 def generate_key(user: str = typer.Option(..., "--user", "-u", help="Username or identifier for this API key")):

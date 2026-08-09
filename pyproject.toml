@@ -1,6 +1,6 @@
 [project]
 name = "matgraph-cli"
-version = "1.0.0"
+version = "1.1.0"
 description = "A modern CLI and GraphQL API tool for Material Science DL Pipelines"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -19,8 +19,6 @@ dependencies = [
     "torch>=2.0.0",
 ]
 
-[project.optional-dependencies]
-aws = ["boto3>=1.28.0"]
 
 [project.scripts]
 matgraph = "matgraph.cli:app"
