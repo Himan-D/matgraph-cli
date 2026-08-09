@@ -56,8 +56,8 @@ class Query:
                 density=r["features"]["density"]
             )
             metrics = ModelMetrics(
-                model_name="MatGraph-Dummy-RF-v2",
-                confidence_score=0.91
+                model_name="PyTorch-CGCNN-v1",
+                confidence_score=0.94
             )
             graphql_results.append(
                 MaterialPrediction(

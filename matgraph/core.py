@@ -37,10 +37,7 @@ def extract_features(structure):
         "density": structure.density
     }
 
-def predict_band_gap(features: dict):
-    """Predict properties using structural features."""
-    pred = max(0.0, (features["num_elements"] * 0.5) - (features["density"] * 0.1))
-    return round(pred, 3)
+from matgraph.cgcnn import cgcnn_predict
 
 def run_pipeline(
     formula: str, 
@@ -66,7 +63,7 @@ def run_pipeline(
             continue
             
         features = extract_features(doc.structure)
-        prediction = predict_band_gap(features)
+        prediction = cgcnn_predict(features)
         
         # Ensure robust retrieval of crystal system
         c_sys = "Unknown"

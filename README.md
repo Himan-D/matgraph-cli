@@ -1,80 +1,84 @@
-# 🔬 MatGraph CLI & GraphQL API
-
-**MatGraph** is the ultimate, open-source tool for Material Science researchers and Machine Learning engineers. It is a complete, production-ready product built for extreme usability and speed.
-
-It abstracts away the complexity of the deep learning pipeline for material properties. With a single command or GraphQL query, you can:
-1. **Fetch & Filter** high-fidelity crystal structures from the Materials Project with advanced constraints.
-2. **Featurize** the materials extracting structural and compositional data.
-3. **Predict** properties (like Band Gap) using built-in ML models.
-4. **Save** datasets seamlessly to JSON or CSV.
-
-## ✨ Features
-- **Ultra-Fast Setup:** Powered by `uv` for lightning-fast dependency resolution.
-- **Advanced CLI Filters:** Search by Band Gap (`--min-gap`, `--max-gap`) and Crystal System (`--crystal-system`).
-- **Data Export:** Instantly save your ML predictions and feature sets using `--save data.csv --format csv`.
-- **Modern GraphQL Engine:** Built with `Strawberry` & `FastAPI`. Fully asynchronous resolvers with nested metrics and filtering options.
+<div align="center">
+  <h1>MatGraph</h1>
+  <p><strong>The modern, end-to-end Material Science Deep Learning Pipeline & GraphQL API</strong></p>
+  
+  [![PyPI - Version](https://img.shields.io/pypi/v/matgraph-cli?color=blue)](https://pypi.org/project/matgraph-cli/)
+  [![Python Versions](https://img.shields.io/pypi/pyversions/matgraph-cli)](https://pypi.org/project/matgraph-cli/)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+</div>
 
 ---
 
-## 🚀 Quick Start (Efficient with `uv`)
+**MatGraph** abstracts away the complexity of deep learning for material properties. Designed for both Material Science researchers and ML engineers, it provides a seamless interface to fetch, featurize, predict, and export crystal structures—all powered by modern technologies like **PyTorch**, **GraphQL**, and **uv**.
 
-### 1. Installation
+## Key Features (v0.2.0 Update)
+*   **PyTorch CGCNN Integrated:** Leverages a custom PyTorch architecture inspired by Crystal Graph Convolutional Neural Networks (CGCNN) for advanced property predictions.
+*   **Ultra-Fast Engine:** Built on top of Astral's `uv` for lightning-fast environment management.
+*   **Advanced Filtering & Export:** Filter structures by Band Gap and Crystal System, and instantly export feature-rich datasets to CSV or JSON.
+*   **Modern Async GraphQL API:** Fully asynchronous resolvers via `Strawberry` & `FastAPI`, providing rich schemas and nested model metrics.
+*   **Sleek CLI:** Beautiful, table-formatted terminal outputs powered by `Typer` and `Rich`.
 
-If you don't have `uv` installed:
+---
+
+## Installation
+
+We recommend using [**uv**](https://github.com/astral-sh/uv) for the fastest installation experience.
+
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# Install via uv (Recommended)
+uv tool install matgraph-cli
+
+# Or via standard pip
+pip install matgraph-cli
 ```
 
-Clone the repo and sync dependencies instantly:
+### Authentication Setup
+To fetch high-fidelity data, you need a free API key from the [Materials Project](https://materialsproject.org/).
 ```bash
-git clone https://github.com/yourusername/matgraph-cli.git
-cd matgraph-cli
-uv sync
+export MP_API_KEY="your_api_key_here"
+```
+*Tip: You can verify your setup anytime by running `matgraph setup <YOUR_KEY>`.*
+
+---
+
+## Usage: The Productive CLI
+
+MatGraph's CLI is designed to be highly intuitive. 
+
+**Basic Prediction Pipeline**
+Run the end-to-end pipeline (Fetch → Featurize → CGCNN Predict) for a specific chemical formula:
+```bash
+matgraph predict LiFePO4
 ```
 
-### 2. Signups and API Key (Important!)
-You need an API key from the Materials Project:
-1. Go to [Materials Project](https://materialsproject.org/)
-2. Sign up / Log in and copy your API Key.
-3. Set up your key in your environment:
+**Advanced Search & Filtering**
+Filter materials based on physical constraints:
 ```bash
-export MP_API_KEY="YOUR_API_KEY"
+matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic
+```
+
+**Dataset Export for ML Engineers**
+Save extracted structural features and predictions directly into a dataset for offline training:
+```bash
+matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv
 ```
 
 ---
 
-## 🛠️ Usage: The Productive CLI
+## Usage: The Modern GraphQL API
 
-**Basic Prediction:**
+Integrate MatGraph into your own web applications seamlessly using our robust, async GraphQL engine.
+
+**Start the Server:**
 ```bash
-uv run matgraph predict LiFePO4
+matgraph serve --port 8000
 ```
+Navigate to `http://localhost:8000/graphql` to explore the interactive GraphiQL playground.
 
-**Advanced Filtering:**
-Filter for materials with a minimum band gap of 1.5 eV and a cubic crystal system:
-```bash
-uv run matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic
-```
-
-**Export & Save Data:**
-Save the extracted features and ML predictions directly to a dataset for offline training:
-```bash
-uv run matgraph predict LiFePO4 --min-gap 2.0 --save dataset.csv --format csv
-```
-
----
-
-## 🌐 Usage: The Modern GraphQL API
-
-Spin up the async GraphQL server:
-```bash
-uv run matgraph serve --port 8000
-```
-
-**Example GraphQL Query with Filters:**
+**Example Query:**
 ```graphql
 query {
-  predictMaterial(formula: "NaCl", minGap: 1.0, crystalSystem: "Cubic", limit: 3) {
+  predictMaterial(formula: "NaCl", minGap: 1.0, limit: 3) {
     materialId
     formula
     crystalSystem
@@ -83,6 +87,11 @@ query {
     features {
       density
       numElements
+      volume
+    }
+    metrics {
+      modelName
+      confidenceScore
     }
   }
 }
@@ -90,12 +99,32 @@ query {
 
 ---
 
-## 🏗️ Tech Stack
-- **Packaging:** uv (Astral) & Hatchling
-- **CLI Framework:** Typer + Rich
-- **GraphQL Engine:** Strawberry (Async) + FastAPI
-- **Material Science:** PyMatGen + MP-API
+## Releases & Changelog
 
-## 🤝 Contributing
-Ready for the open-source community! 
-Run tests with `uv run pytest` and submit PRs for custom model integrations (like PyTorch CGCNN!).
+### **v0.2.x (Current - Advanced ML Update)**
+*   **Feature:** Integrated PyTorch architecture (`CrystalGraphConvNet`) replacing legacy dummy models.
+*   **Feature:** Advanced CLI filtering (`--min-gap`, `--max-gap`, `--crystal-system`).
+*   **Feature:** One-command dataset exporting (`--save`, `--format`).
+*   **Improvement:** GraphQL schema modernized with detailed `ModelMetrics` and GraphQL pagination filters.
+
+### **v0.1.x (Initial Release)**
+*   Initial end-to-end pipeline with MP-API fetching and basic feature extraction.
+*   GraphQL Server & basic Typer CLI introduced.
+*   Project migrated to `uv` build backend for maximum efficiency.
+
+---
+
+## Contributing & Architecture
+MatGraph is built on a robust, modern Python stack:
+*   **ML & Science:** PyTorch, PyMatGen, Scikit-Learn, MP-API
+*   **API & CLI:** FastAPI, Strawberry GraphQL, Typer, Rich
+*   **Packaging:** uv (Hatchling)
+
+We welcome contributions! To set up for local development:
+```bash
+git clone https://github.com/Himan-D/matgraph-cli.git
+cd matgraph-cli
+uv sync
+uv run pytest
+```
+Please open an issue before submitting major pull requests.
