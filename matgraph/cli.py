@@ -4,13 +4,25 @@ from rich.table import Table
 import os
 import uvicorn
 from typing import Optional
-from matgraph.core import run_pipeline, save_results
+from matgraph.core import run_pipeline, save_results, substitute_material, simulate_xrd
+from matgraph.sdk import MatGraphSDK
+from matgraph.auth import generate_api_key
 
 import sys
 import importlib.metadata
 
-app = typer.Typer(help="MatGraph CLI: The complete Material Science ML Product.")
+app = typer.Typer(help="MatGraph CLI: Deep Learning for Material Science", no_args_is_help=True)
+api_app = typer.Typer(help="Manage API keys for the GraphQL Server")
+app.add_typer(api_app, name="auth")
 console = Console()
+
+@api_app.command("generate")
+def generate_key(user: str = typer.Option(..., "--user", "-u", help="Username or identifier for this API key")):
+    """Generates a secure API key for authenticating with the MatGraph GraphQL Server."""
+    console.print(f"[bold cyan]Generating API Key for {user}...[/bold cyan]")
+    key = generate_api_key(user)
+    console.print(f"[bold green]Success![/bold green] Your API Key is: [bold yellow]{key}[/bold yellow]")
+    console.print("[bold red]Please save this key securely! It grants access to the GraphQL API.[/bold red]")
 
 def version_callback(value: bool):
     if value:

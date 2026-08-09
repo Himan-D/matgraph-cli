@@ -120,10 +120,17 @@ Integrate MatGraph into your own web applications seamlessly using our robust, a
 uvicorn matgraph.graphql_app:app --reload
 ```
 
-### Security (API Key)
-You must pass the `x-api-key` header with your requests. By default, the key is `matgraph_secret_2026`.
-You can change this by setting the `MATGRAPH_API_KEY` environment variable on your server.
+### Security (API Key Generation)
+The API is secured. You can generate a multi-tenant secure API key for different users from the CLI:
 
+```bash
+matgraph auth generate --user "Client-A"
+```
+*Output: `mg_S8jvhzo58p6XQE_fS0Oru1WqG2AJR6x5`*
+
+This key will be saved locally (`~/.matgraph_keys.json`) and instantly authorized to use your GraphQL API.
+
+Alternatively, you can set a master API Key using an environment variable on your server:
 ```bash
 export MATGRAPH_API_KEY="my_super_secret_key"
 ```
@@ -132,7 +139,7 @@ export MATGRAPH_API_KEY="my_super_secret_key"
 ```bash
 curl -X POST http://localhost:8000/graphql \
   -H "Content-Type: application/json" \
-  -H "x-api-key: matgraph_secret_2026" \
+  -H "x-api-key: <YOUR_GENERATED_KEY>" \
   -d '{"query": "query { predictMaterial(formula: \"LiFePO4\") { predictedFormEnergy } }"}'
 ```
 
