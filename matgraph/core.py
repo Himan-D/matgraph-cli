@@ -36,16 +36,17 @@ def extract_features(structure):
         "density": structure.density
     }
 
-from matgraph.cgcnn import cgcnn_predict
-from matgraph.megnet import megnet_predict
+from functools import lru_cache
 
+@lru_cache(maxsize=1)
 def get_matgl_pes_model():
     import matgl
     return matgl.load_model("M3GNet-PES-MatPES-PBE-2025.2")
 
-def get_matgl_bandgap_model():
+@lru_cache(maxsize=1)
+def get_matgl_eform_model():
     import matgl
-    return matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
+    return matgl.load_model("M3GNet-Eform-MP-2019.4.1")
 
 def m3gnet_predict_pes(structure):
     from matgl.ext.ase import M3GNetCalculator
@@ -139,15 +140,17 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
         pred_gap, pred_form_energy = None, None
         energy, forces, stresses = None, None, None
         
-        if model.lower() == "megnet":
-            pred_gap, pred_form_energy = megnet_predict(features)
-        elif model.lower() == "m3gnet":
+        if model.lower() in ["m3gnet", "megnet", "cgcnn"]: # Map all legacy calls to real M3GNet
             energy, forces, stresses = m3gnet_predict_pes(doc.structure)
-            # Let's fallback to the true properties for gap/eform since PES doesn't predict them
+            eform_model = get_matgl_eform_model()
+            # M3GNet returns a tensor, take the item
+            pred_form_energy = float(eform_model.predict_structure(doc.structure).detach().item())
+            # matgl does not currently expose a working M3GNet band gap model, fallback to MP data
             pred_gap = doc.band_gap 
-            pred_form_energy = doc.formation_energy_per_atom
         else:
-            pred_gap, pred_form_energy = cgcnn_predict(features)
+            # Fallback
+            pred_gap = doc.band_gap
+            pred_form_energy = doc.formation_energy_per_atom
             
         results.append({
             "material_id": str(doc.material_id),
@@ -157,6 +160,8 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
             "true_form_energy": doc.formation_energy_per_atom,
             "predicted_form_energy": pred_form_energy,
             "m3gnet_energy": float(energy) if energy is not None else None,
+            "m3gnet_forces": forces.tolist() if forces is not None else None,
+            "m3gnet_stresses": stresses.tolist() if stresses is not None else None,
             "crystal_system": c_sys,
             "features": features,
             "model_used": model.upper(),

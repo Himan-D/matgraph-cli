@@ -12,13 +12,13 @@ class MatGraphSDK:
         if not self.api_key:
             raise ValueError("Materials Project API key is required. Pass it or set MP_API_KEY.")
 
-    def predict(self, formula: str, model: str = "cgcnn", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None) -> List[Dict[str, Any]]:
+    def predict(self, formula: str, model: str = "m3gnet", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Runs the full ML prediction pipeline on a material.
         
         Args:
             formula: Chemical formula (e.g., 'LiFePO4')
-            model: 'cgcnn', 'megnet', or 'm3gnet'
+            model: 'm3gnet' (legacy 'cgcnn', 'megnet' also route to 'm3gnet' now)
             min_gap: Minimum true band gap
             max_gap: Maximum true band gap
             crystal_system: e.g., 'Cubic'
@@ -35,7 +35,7 @@ class MatGraphSDK:
             model=model
         )
 
-    def evaluate(self, formula: str, model: str = "cgcnn") -> Dict[str, float]:
+    def evaluate(self, formula: str, model: str = "m3gnet") -> Dict[str, float]:
         """
         Evaluates the Mean Absolute Error (MAE) for a given formula across available polymorphs.
         

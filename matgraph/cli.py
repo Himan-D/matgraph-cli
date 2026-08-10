@@ -75,7 +75,7 @@ def predict(
     crystal_system: Optional[str] = typer.Option(None, "--crystal-system", help="Filter by crystal system (e.g., Cubic, Hexagonal)"),
     save: Optional[str] = typer.Option(None, "--save", help="File path to save results (e.g., results.csv)"),
     format: str = typer.Option("csv", "--format", help="Save format: 'csv' or 'json'"),
-    model: str = typer.Option("cgcnn", "--model", help="Model to use for prediction: 'cgcnn' or 'megnet'"),
+    model: str = typer.Option("m3gnet", "--model", help="Model to use for prediction: 'm3gnet'"),
     cif: bool = typer.Option(False, "--cif", help="Export the raw crystal structure of the results to .cif files")
 ):
     """Run the complete ML pipeline with advanced search filters and data saving."""
@@ -118,8 +118,9 @@ def predict(
         
         for r in results:
             if model.lower() == "m3gnet":
+                import numpy as np
                 energy = f"{r['m3gnet_energy']:.3f}" if r['m3gnet_energy'] is not None else "N/A"
-                max_force = f"{max(r['m3gnet_forces']):.3f}" if r['m3gnet_forces'] else "N/A"
+                max_force = f"{np.max(np.abs(r['m3gnet_forces'])):.3f}" if r.get('m3gnet_forces') else "N/A"
                 table.add_row(str(r["material_id"]).replace("mp-", ""), r["formula"], energy, max_force, r["crystal_system"])
             else:
                 true_form = str(round(r["true_form_energy"], 3)) if r["true_form_energy"] is not None else "N/A"
@@ -194,7 +195,7 @@ def xrd(formula: str):
         console.print(f"[red]XRD Error: {e}[/red]")
 
 @app.command()
-def evaluate(formula: str, model: str = typer.Option("cgcnn", "--model", help="Model to evaluate")):
+def evaluate(formula: str, model: str = typer.Option("m3gnet", "--model", help="Model to evaluate")):
     """Evaluate model accuracy (MAE) against true Materials Project data."""
     api_key = os.environ.get("MP_API_KEY")
     if not api_key:
