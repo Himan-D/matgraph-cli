@@ -6,7 +6,7 @@
   [![PyPI](https://img.shields.io/pypi/v/matgraph-cli?color=blue&label=PyPI)](https://pypi.org/project/matgraph-cli/)
   [![Python](https://img.shields.io/pypi/pyversions/matgraph-cli)](https://pypi.org/project/matgraph-cli/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Downloads](https://img.shields.io/pypi/dm/matgraph-cli?color=green&label=Downloads)](https://pypi.org/project/matgraph-cli/)
+  [![Downloads](https://static.pepy.tech/badge/matgraph-cli)](https://pepy.tech/project/matgraph-cli)
 </div>
 
 ---
