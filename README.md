@@ -5,8 +5,7 @@
 
   [![PyPI version](https://badge.fury.io/py/matgraph-cli.svg)](https://badge.fury.io/py/matgraph-cli)
   [![Downloads](https://static.pepy.tech/badge/matgraph-cli)](https://pepy.tech/project/matgraph-cli)
-  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hima-d/matgraph-cli/blob/main/notebooks/MatGraph_Tutorial.ipynb)
-  [![Hugging Face Models](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-blue)](https://huggingface.co/Himan-de/MatGraph-Universal-Potential)
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Himan-D/matgraph-cli/blob/main/notebooks/MatGraph_Tutorial.ipynb)
 </div>
 
 ---
