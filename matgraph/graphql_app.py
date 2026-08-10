@@ -40,18 +40,21 @@ class Query:
         max_gap: typing.Optional[float] = None,
         crystal_system: typing.Optional[str] = None,
         model: typing.Optional[str] = "cgcnn",
-        limit: typing.Optional[int] = 10
+        limit: typing.Optional[int] = None
     ) -> typing.List[MaterialPrediction]:
         api_key = os.environ.get("MP_API_KEY")
         if not api_key:
             raise Exception("MP_API_KEY environment variable is missing.")
             
+        from matgraph.settings import settings
+        eff_limit = limit if limit is not None else settings.graphql_default_limit
+        eff_limit = min(eff_limit, settings.graphql_max_limit)
         raw_results = await asyncio.to_thread(
             run_pipeline, formula, api_key, min_gap, max_gap, crystal_system, model
         )
         
         graphql_results = []
-        for r in raw_results[:limit]:
+        for r in raw_results[:eff_limit]:
             feats = MaterialFeatures(
                 num_elements=r["features"]["num_elements"],
                 mean_atomic_mass=r["features"]["mean_atomic_mass"],
@@ -131,3 +134,34 @@ app = FastAPI(
     description="Modern, Async GraphQL API with advanced filtering"
 )
 app.include_router(graphql_app, prefix="/graphql", dependencies=[Depends(get_api_key)])
+
+# REST fallback for researchers who prefer curl | jq
+from pydantic import BaseModel
+from matgraph.config import get_api_key as _cfg_get
+
+class PredictRESTRequest(BaseModel):
+    formula: str
+    min_gap: typing.Optional[float] = None
+    max_gap: typing.Optional[float] = None
+    crystal_system: typing.Optional[str] = None
+    model: str = "m3gnet"
+    limit: typing.Optional[int] = None
+
+@app.post("/v1/predict", dependencies=[Depends(get_api_key)])
+async def rest_predict(req: PredictRESTRequest):
+    import asyncio, os
+    from matgraph.core import run_pipeline
+    api_key = os.getenv("MP_API_KEY") or _cfg_get() or ""
+    if not api_key:
+        raise HTTPException(status_code=500, detail="MP_API_KEY not configured on server")
+    from matgraph.settings import settings
+    eff_limit = req.limit if req.limit is not None else settings.graphql_default_limit
+    eff_limit = min(eff_limit, settings.graphql_max_limit)
+    results = await asyncio.to_thread(run_pipeline, req.formula, api_key, req.min_gap, req.max_gap, req.crystal_system, req.model)
+    # strip non-serializable structure
+    clean = [{k: v for k, v in r.items() if k != "structure"} for r in results[:eff_limit]]
+    return {"count": len(clean), "results": clean}
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}

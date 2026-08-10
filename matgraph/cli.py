@@ -74,9 +74,11 @@ def predict(
     max_gap: Optional[float] = typer.Option(None, "--max-gap", help="Maximum true band gap to filter (eV)"),
     crystal_system: Optional[str] = typer.Option(None, "--crystal-system", help="Filter by crystal system (e.g., Cubic, Hexagonal)"),
     save: Optional[str] = typer.Option(None, "--save", help="File path to save results (e.g., results.csv)"),
-    format: str = typer.Option("csv", "--format", help="Save format: 'csv' or 'json'"),
+    format: str = typer.Option("csv", "--format", help="Save format: 'csv' or 'json' (or parquet)"),
     model: str = typer.Option("m3gnet", "--model", help="Model to use for prediction: 'm3gnet'"),
-    cif: bool = typer.Option(False, "--cif", help="Export the raw crystal structure of the results to .cif files")
+    cif: bool = typer.Option(False, "--cif", help="Export the raw crystal structure of the results to .cif files"),
+    seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for deterministic relax/perturb"),
+    as_frame: bool = typer.Option(False, "--as-frame", help="Print as pandas table shape instead of Rich table (for scripting)")
 ):
     """Run the complete ML pipeline with advanced search filters and data saving."""
     api_key = get_api_key()
@@ -89,13 +91,15 @@ def predict(
         console.print(f"[dim]Filters applied - Min Gap: {min_gap}, Max Gap: {max_gap}, System: {crystal_system}[/dim]")
     
     try:
+        from matgraph.exceptions import ValidationError, DataNotFoundError, ModelInferenceError
         results = run_pipeline(
             formula=formula, 
             api_key=api_key, 
             min_gap=min_gap, 
             max_gap=max_gap, 
             crystal_system=crystal_system,
-            model=model
+            model=model,
+            seed=seed
         )
         
         if not results:
@@ -233,7 +237,7 @@ def evaluate(formula: str, model: str = typer.Option("m3gnet", "--model", help="
         console.print(f"[red]Evaluation Error: {e}[/red]")
 
 @app.command()
-def substitute(formula: str, elem_out: str, elem_in: str):
+def substitute(formula: str, elem_out: str, elem_in: str, seed: Optional[int] = typer.Option(None, "--seed", help="Seed for determinism")):
     """
     (GNoME-inspired) Perform hypothetical elemental substitution to predict stability of a new material.
     e.g., matgraph substitute LiFePO4 Li Na
@@ -246,7 +250,7 @@ def substitute(formula: str, elem_out: str, elem_in: str):
         
     console.print(f"[cyan]Generative Discovery: Substituting {elem_out} with {elem_in} in {formula}...[/cyan]")
     try:
-        res = substitute_material(formula, elem_out, elem_in, api_key)
+        res = substitute_material(formula, elem_out, elem_in, api_key, seed=seed)
         
         table = Table(title=f"Thermodynamic Stability Analysis")
         table.add_column("Material", style="magenta")
@@ -350,6 +354,7 @@ def design(
 def relax(
     formula: str,
     steps: int = typer.Option(10, "--steps", help="Number of relaxation steps"),
+    seed: Optional[int] = typer.Option(None, "--seed", help="Seed"),
     api_key: str = typer.Option(None, envvar="MP_API_KEY", help="Materials Project API Key")
 ):
     """
@@ -358,7 +363,7 @@ def relax(
     sdk = MatGraphSDK(api_key=api_key)
     with console.status(f"[bold green]Relaxing {formula} structure with M3GNet + ASE for {steps} steps..."):
         try:
-            result = sdk.relax(formula, steps=steps)
+            result = sdk.relax(formula, steps=steps, seed=seed)
             
             console.print(f"[bold cyan]Relaxation Complete for {formula}![/bold cyan]")
             console.print(f"Steps taken: {result['steps_taken']}")
@@ -375,6 +380,8 @@ def evolve(
     formula: str,
     population: int = typer.Option(10, "--population", help="Number of structures in each generation"),
     generations: int = typer.Option(5, "--generations", help="Number of generations to evolve"),
+    allowed_elements: Optional[str] = typer.Option(None, "--allowed-elements", help="Comma-separated allowed elements (overrides MATGRAPH_GA_ELEMENTS)"),
+    seed: Optional[int] = typer.Option(None, "--seed", help="Seed for determinism"),
     api_key: str = typer.Option(None, envvar="MP_API_KEY", help="Materials Project API Key")
 ):
     """
@@ -388,7 +395,8 @@ def evolve(
     
     with console.status(f"[bold green]Running Generation Evolution (Evaluating M3GNet Energies)..."):
         try:
-            history = sdk.evolve(formula, population_size=population, generations=generations)
+            elems = [s.strip() for s in allowed_elements.split(",")] if allowed_elements else None
+            history = sdk.evolve(formula, population_size=population, generations=generations, allowed_elements=elems, seed=seed)
             
             console.print("\n[bold green]Evolution Complete![/bold green]")
             table = Table(title="Evolution History (Best per Generation)")
@@ -417,6 +425,7 @@ def dft(
     formula: str,
     code: str = typer.Option("vasp", "--code", help="DFT code: 'vasp' or 'qe'"),
     output_dir: str = typer.Option("dft_inputs", "--output-dir", help="Output directory for DFT files"),
+    seed: Optional[int] = typer.Option(None, "--seed", help="Seed"),
     api_key: str = typer.Option(None, envvar="MP_API_KEY"),
 ):
     """
@@ -425,7 +434,7 @@ def dft(
     sdk = MatGraphSDK(api_key=api_key)
     console.print(f"[cyan]Pre-relaxing {formula} with M3GNet and generating {code.upper()} inputs...[/cyan]")
     try:
-        result = sdk.export_dft(formula, code=code, output_dir=output_dir)
+        result = sdk.export_dft(formula, code=code, output_dir=output_dir, seed=seed)
         console.print(f"[bold green]DFT inputs written to: {result['directory']}[/bold green]")
         for f in result["files_written"]:
             console.print(f"  - {f}")

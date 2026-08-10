@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    environment:
+      - MP_API_KEY=${MP_API_KEY}
+      - MATGRAPH_CACHE_DIR=/data/cache
+      - MATGRAPH_GRAPHQL_DEFAULT_LIMIT=10
+    volumes:
+      - matcache:/data/cache
+
+volumes:
+  matcache:

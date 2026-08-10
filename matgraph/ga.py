@@ -1,155 +1,131 @@
 import random
-import copy
-from typing import List, Dict, Any
+import logging
+from typing import List, Dict, Any, Optional
 from pymatgen.core import Structure
 from pymatgen.transformations.standard_transformations import SubstitutionTransformation, PerturbStructureTransformation
 from pymatgen.io.ase import AseAtomsAdaptor
 from ase.optimize import FIRE
 import numpy as np
 
-# We import the cached models from core
 from matgraph.core import get_matgl_pes_model, get_matgl_eform_model, fetch_materials_data
+from matgraph.settings import settings
+
+logger = logging.getLogger(__name__)
 
 class CrystalGA:
-    def __init__(self, base_formula: str, api_key: str, population_size: int = 10, target_property: str = "formation_energy"):
+    def __init__(self, base_formula: str, api_key: str, population_size: int = 10, target_property: str = "formation_energy",
+                 allowed_elements: Optional[List[str]] = None, seed: Optional[int] = None,
+                 mutate_intensity: Optional[float] = None, init_mutate_intensity: Optional[float] = None,
+                 scale_jitter: Optional[float] = None, relax_fmax: Optional[float] = None, relax_steps: Optional[int] = None,
+                 elite_frac: Optional[float] = None):
         self.base_formula = base_formula
         self.api_key = api_key
         self.population_size = population_size
         self.target_property = target_property
         self.population: List[Structure] = []
-        
-        # We need elements to mutate into. Let's use a list of common solid-state elements
-        self.allowed_elements = ["Li", "Na", "K", "Mg", "Ca", "Fe", "Co", "Ni", "Mn", "Ti", "V", "O", "S", "P", "Si"]
+        self.seed = seed
+        if seed is not None:
+            random.seed(seed); np.random.seed(seed % (2**32-1))
+        # all tunables from settings, not hardcode
+        self.allowed_elements = allowed_elements if allowed_elements is not None else list(settings.ga_allowed_elements)
+        self.mutate_intensity = mutate_intensity if mutate_intensity is not None else settings.ga_mutate_intensity
+        self.init_mutate_intensity = init_mutate_intensity if init_mutate_intensity is not None else settings.ga_init_mutate_intensity
+        self.scale_jitter = scale_jitter if scale_jitter is not None else settings.ga_scale_jitter
+        self.relax_fmax = relax_fmax if relax_fmax is not None else settings.ga_relax_fmax
+        self.relax_steps = relax_steps if relax_steps is not None else settings.ga_relax_steps
+        self.elite_frac = elite_frac if elite_frac is not None else settings.ga_elite_frac
 
     def _initialize_population(self):
-        """Fetch the base structure and generate initial mutants."""
         docs = fetch_materials_data(self.base_formula, self.api_key)
         if not docs or not docs[0].structure:
             raise ValueError(f"Could not fetch baseline structure for {self.base_formula}")
-            
         base_structure = docs[0].structure
         self.population.append(base_structure)
-        
-        # Generate initial population via random permutations
         for _ in range(self.population_size - 1):
-            mutated = self._mutate(base_structure, intensity=0.2)
+            mutated = self._mutate(base_structure, intensity=self.init_mutate_intensity)
             self.population.append(mutated)
 
-    def _mutate(self, structure: Structure, intensity: float = 0.1) -> Structure:
-        """Apply random mutations: coordinate perturbation, lattice scaling, or elemental substitution."""
+    def _mutate(self, structure: Structure, intensity: Optional[float] = None) -> Structure:
+        if intensity is None:
+            intensity = self.mutate_intensity
         new_struct = structure.copy()
         mutation_type = random.choice(["perturb", "substitute", "scale"])
-        
         try:
             if mutation_type == "perturb":
-                # Randomly perturb atomic coordinates
-                trans = PerturbStructureTransformation(distance=intensity * 2.0)
+                trans = PerturbStructureTransformation(distance=float(intensity) * 2.0)
                 new_struct = trans.apply_transformation(new_struct)
-                
             elif mutation_type == "substitute":
-                # Pick a random site and substitute its species
                 elements_in_struct = [str(el) for el in new_struct.composition.elements]
                 el_to_replace = random.choice(elements_in_struct)
-                new_el = random.choice([e for e in self.allowed_elements if e != el_to_replace])
+                candidates = [e for e in self.allowed_elements if e != el_to_replace]
+                if not candidates:
+                    return new_struct
+                new_el = random.choice(candidates)
                 trans = SubstitutionTransformation({el_to_replace: new_el})
                 new_struct = trans.apply_transformation(new_struct)
-                
             elif mutation_type == "scale":
-                # Scale the lattice volume by +/- 5%
-                scale_factor = 1.0 + random.uniform(-0.05, 0.05) * intensity
+                scale_factor = 1.0 + random.uniform(-self.scale_jitter, self.scale_jitter) * float(intensity)
+                # scale_lattice expects new volume
                 new_struct.scale_lattice(new_struct.volume * scale_factor)
-        except Exception:
-            pass # Fallback to original if transformation fails (e.g., incompatible substitution)
-            
+        except Exception as e:
+            logger.debug("mutate failed %s->%s: %s", mutation_type, e, exc_info=True)
         return new_struct
 
     def _crossover(self, parent1: Structure, parent2: Structure) -> Structure:
-        """Very simple crossover: take lattice from parent1, but try to mix species."""
         child = parent1.copy()
-        # In a real GA, you'd slice the fractional coordinates. 
-        # Here we just introduce a random species from parent2 into parent1.
         p2_elements = [str(el) for el in parent2.composition.elements]
         p1_elements = [str(el) for el in child.composition.elements]
-        
         if set(p1_elements) != set(p2_elements):
             try:
                 el_to_add = random.choice(list(set(p2_elements) - set(p1_elements)))
                 el_to_remove = random.choice(p1_elements)
                 trans = SubstitutionTransformation({el_to_remove: el_to_add})
                 child = trans.apply_transformation(child)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("crossover failed: %s", e)
         return child
 
     def _evaluate(self, structure: Structure) -> float:
-        """Evaluate fitness using M3GNet. Lower is better (we are minimizing formation energy)."""
-        # Relax the structure first so we don't evaluate unphysical states
         from matgl.ext.ase import M3GNetCalculator
         pot = get_matgl_pes_model()
         atoms = AseAtomsAdaptor.get_atoms(structure)
         atoms.calc = M3GNetCalculator(potential=pot)
-        
         dyn = FIRE(atoms, logfile=None)
-        dyn.run(fmax=0.1, steps=20) # Fast relaxation
-        
+        dyn.run(fmax=self.relax_fmax, steps=self.relax_steps)
         relaxed_struct = AseAtomsAdaptor.get_structure(atoms)
-        
         eform_model = get_matgl_eform_model()
         formation_energy = float(eform_model.predict_structure(relaxed_struct).detach().item())
-        
-        # Update the structure with its relaxed coordinates
         for i, site in enumerate(relaxed_struct):
             structure[i].frac_coords = site.frac_coords
         structure.lattice = relaxed_struct.lattice
-            
         return formation_energy
 
     def run(self, generations: int = 5) -> List[Dict[str, Any]]:
-        """Run the genetic algorithm evolution."""
         self._initialize_population()
-        
         history = []
-        
         for gen in range(generations):
-            # Evaluate all
             scored_population = []
             for struct in self.population:
                 try:
                     fitness = self._evaluate(struct)
                     scored_population.append((fitness, struct))
                 except Exception as e:
-                    # Penalize failed evaluations
-                    scored_population.append((999.0, struct))
-            
-            # Sort by fitness (minimize formation energy)
+                    logger.warning("GA evaluate failed gen %d: %s", gen+1, e)
+                    scored_population.append((float("inf"), struct))
             scored_population.sort(key=lambda x: x[0])
-            
             best_fitness, best_struct = scored_population[0]
-            history.append({
-                "generation": gen + 1,
-                "best_formula": best_struct.composition.reduced_formula,
-                "best_fitness": best_fitness,
-                "structure": best_struct
-            })
-            
-            # Elitism: keep top 20%
-            elite_count = max(1, int(self.population_size * 0.2))
+            history.append({"generation": gen + 1, "best_formula": best_struct.composition.reduced_formula, "best_fitness": best_fitness, "structure": best_struct})
+            elite_count = max(1, int(self.population_size * self.elite_frac))
             next_generation = [s for f, s in scored_population[:elite_count]]
-            
-            # Crossover and Mutation to fill the rest
             while len(next_generation) < self.population_size:
                 if random.random() < 0.3 and len(scored_population) > 1:
-                    # Crossover
                     p1 = random.choice(scored_population[:elite_count])[1]
                     p2 = random.choice(scored_population[:elite_count])[1]
                     child = self._crossover(p1, p2)
                     next_generation.append(child)
                 else:
-                    # Mutate
                     parent = random.choice(scored_population[:elite_count])[1]
                     child = self._mutate(parent)
                     next_generation.append(child)
-                    
             self.population = next_generation
-            
         return history

@@ -17,14 +17,30 @@ import sqlite3
 from pathlib import Path
 from typing import Optional, Any
 
-CACHE_DIR = Path.home() / ".matgraph_cache"
-CACHE_DB = CACHE_DIR / "cache.db"
+def _cache_dir() -> Path:
+    from matgraph.settings import settings, cache_db_path
+    return settings.cache_dir
+
+def _cache_db() -> Path:
+    from matgraph.settings import cache_db_path
+    return cache_db_path()
+
+CACHE_DIR = _cache_dir()
+CACHE_DB = _cache_db()
 
 
 def _init_db() -> sqlite3.Connection:
     """Initialize the SQLite cache database."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(CACHE_DB))
+    from matgraph.settings import settings
+    db = _cache_db()
+    db.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(db))
+    # WAL for concurrency, no hardcode
+    try:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA synchronous=NORMAL;")
+    except Exception:
+        pass
     conn.execute("""
         CREATE TABLE IF NOT EXISTS cache (
             key TEXT PRIMARY KEY,
@@ -43,11 +59,14 @@ def _get_cache_key(prefix: str, **kwargs) -> str:
     return f"{prefix}:{digest}"
 
 
-def cache_get(prefix: str, ttl: int = 3600, **kwargs) -> Optional[Any]:
+def cache_get(prefix: str, ttl: Optional[int] = None, **kwargs) -> Optional[Any]:
     """
     Retrieve cached result if it exists and is within TTL.
-    Returns None on cache miss.
+    TTL comes from settings.get_ttl(prefix) if not passed.
     """
+    from matgraph.settings import get_ttl
+    if ttl is None:
+        ttl = get_ttl(prefix)
     key = _get_cache_key(prefix, **kwargs)
     try:
         conn = _init_db()
@@ -97,14 +116,17 @@ def cache_clear():
 def cache_stats() -> dict:
     """Return cache statistics."""
     try:
+        from matgraph.settings import cache_db_path
+        db = cache_db_path()
         conn = _init_db()
         total = conn.execute("SELECT COUNT(*) FROM cache").fetchone()[0]
-        size_bytes = CACHE_DB.stat().st_size if CACHE_DB.exists() else 0
+        size_bytes = db.stat().st_size if db.exists() else 0
         conn.close()
         return {
             "entries": total,
             "size_mb": round(size_bytes / (1024 * 1024), 2),
-            "location": str(CACHE_DB),
+            "location": str(db),
         }
     except Exception:
-        return {"entries": 0, "size_mb": 0, "location": str(CACHE_DB)}
+        from matgraph.settings import cache_db_path
+        return {"entries": 0, "size_mb": 0, "location": str(cache_db_path())}
