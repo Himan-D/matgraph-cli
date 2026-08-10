@@ -2,7 +2,6 @@ import os
 import json
 import csv
 from typing import Optional, Tuple, List
-from mp_api.client import MPRester
 from matgraph.cdn import cache_get, cache_put
 
 def fetch_materials_data(
@@ -22,6 +21,7 @@ def fetch_materials_data(
     if crystal_system:
         search_kwargs["crystal_system"] = crystal_system
 
+    from mp_api.client import MPRester
     with MPRester(api_key) as mpr:
         docs = mpr.materials.summary.search(**search_kwargs)
     return docs
@@ -212,6 +212,7 @@ def fetch_phonon_dos(formula: str, api_key: str, phonon_method: str = "dfpt"):
     if not docs:
         raise ValueError(f"Could not find baseline data for {formula}.")
         
+    from mp_api.client import MPRester
     with MPRester(api_key) as mpr:
         for doc in docs:
             mat_id = str(doc.material_id)
@@ -250,6 +251,7 @@ def inverse_design(api_key: str, min_gap: float = None, max_gap: float = None, c
     if include_elements:
         kwargs["elements"] = include_elements
 
+    from mp_api.client import MPRester
     with MPRester(api_key) as mpr:
         docs = mpr.materials.summary.search(**kwargs)
         

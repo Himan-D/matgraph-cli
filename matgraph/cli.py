@@ -2,7 +2,6 @@ import typer
 from rich.console import Console
 from rich.table import Table
 import os
-import uvicorn
 from typing import Optional
 from matgraph.core import run_pipeline, save_results, substitute_material, simulate_xrd
 from matgraph.sdk import MatGraphSDK
@@ -379,6 +378,7 @@ def serve(port: int = 8000):
         
     console.print(f"[green]Starting modern GraphQL server on port {port}...[/green]")
     console.print(f"[cyan]Explore the API at http://localhost:{port}/graphql[/cyan]")
+    import uvicorn
     uvicorn.run("matgraph.graphql_app:app", host="0.0.0.0", port=port, reload=False)
 
 if __name__ == "__main__":
