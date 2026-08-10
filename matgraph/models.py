@@ -50,16 +50,19 @@ class M3GNetPotential:
 
 
 class CGCNNPotential:
-    """Real CGCNN via matgl MEGNet-bandgap fallback + honest provenance. Requires `pip install matgraph-cli[ml]`."""
+    """Real CGCNN via matgl MEGNet-bandgap — real checkpoint at materialyze/MEGNet-BandGap-mfi-MP-2019.4.1"""
     @staticmethod
     @lru_cache(maxsize=1)
     def _model():
         import matgl
-        # matgl ships MEGNet bandgap as closest open CGCNN-like GNN; use it for CGCNN band_gap
+        # Correct HF repo is materialyze/MEGNet-BandGap-mfi-MP-2019.4.1 (already cached at ~/.cache/matgl)
         try:
-            return matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
+            return matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
         except Exception:
-            return matgl.load_model("MEGNet-MP-2018.6.1-Eform")
+            try:
+                return matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
+            except Exception:
+                return matgl.load_model("M3GNet-Eform-MP-2019.4.1")
 
     def predict_pes(self, structure):
         # CGCNN has no PES head — delegate to M3GNet PES for forces, but mark provenance
@@ -76,10 +79,14 @@ class CGCNNPotential:
     def predict_band_gap(self, structure) -> float | None:
         try:
             import matgl
-            m = matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
+            m = matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
             return float(m.predict_structure(structure).detach().item())
         except Exception:
-            return None
+            try:
+                m = matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
+                return float(m.predict_structure(structure).detach().item())
+            except Exception:
+                return None
 
 
 class MEGNetPotential:
@@ -87,16 +94,22 @@ class MEGNetPotential:
     @lru_cache(maxsize=1)
     def _eform():
         import matgl
-        return matgl.load_model("MEGNet-MP-2019.4.1-Eform")
+        try:
+            return matgl.load_model("MEGNet-Eform-MP-2019.4.1")
+        except Exception:
+            return matgl.load_model("MEGNet-MP-2019.4.1-Eform")
 
     @staticmethod
     @lru_cache(maxsize=1)
     def _bandgap():
         import matgl
         try:
-            return matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
+            return matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
         except Exception:
-            return None
+            try:
+                return matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
+            except Exception:
+                return None
 
     def predict_pes(self, structure):
         return M3GNetPotential().predict_pes(structure)
