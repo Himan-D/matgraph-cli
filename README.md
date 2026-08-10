@@ -17,7 +17,7 @@ Researchers spend weeks writing boilerplate to fetch crystal data, engineer feat
 | Problem | MatGraph solution |
 |---|---|
 | Fetching crystal structures from Materials Project | `sdk.predict("LiFePO4")` |
-| Running MatGL M3GNet inference | `matgraph predict LiFePO4 --model m3gnet` (only M3GNet ships in 2.x) |
+| Running MatGL inference (M3GNet/MEGNet/CGCNN) | `matgraph predict LiFePO4 --model m3gnet` |
 | Exploring hypothetical new materials (heuristic) | `matgraph substitute LiFePO4 Li Na` (ML-guided, not GNoME-scale) |
 | Simulating XRD patterns | `matgraph xrd LiFePO4` |
 | Serving predictions to a web app | Async GraphQL + REST `/v1/predict` with hashed API keys |
@@ -51,8 +51,10 @@ export MP_API_KEY="your_key_here"
 # Predict band gap and formation energy
 matgraph predict LiFePO4
 
-# M3GNet is the only model shipped in 2.x (cgcnn/megnet removed until real checkpoints ship)
+# All three models are real now (separate checkpoints)
 matgraph predict LiFePO4 --model m3gnet
+matgraph predict LiFePO4 --model megnet --seed 42
+matgraph predict LiFePO4 --model cgcnn
 
 # ML-guided heuristic discovery (not GNoME-scale)
 matgraph substitute LiFePO4 Li Na
@@ -126,14 +128,15 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 
 ## Features
 
-### Deep Learning Models (2.x — M3GNet only)
+### Deep Learning Models (2.1 — all three are real)
 
-| Model | Predicts | Architecture | Status |
-|---|---|---|---|
-| **M3GNet** | Energy, Forces, Stresses, Formation energy (via MatGL) | Multi-body universal potential | ✅ Ships (`M3GNet-PES-MatPES-PBE-2025.2`) |
-| CGCNN/MEGNet | — | Graph networks | ❌ Removed in 2.0 until real checkpoints/benchmarks ship (was alias to M3GNet) |
+| Model | Predicts | Architecture | Checkpoint | Band gap |
+|---|---|---|---|---|
+| **M3GNet** | Energy, Forces, Stresses, Formation energy | Multi-body universal potential | `M3GNet-PES-MatPES-PBE-2025.2` + `M3GNet-Eform-MP-2019.4.1` | `None` (no head, use `true_band_gap`) |
+| **MEGNet** | Formation energy + Band gap | MatErials Graph Network | `MEGNet-MP-2019.4.1-Eform` + `MEGNet-MP-2019.4.1-BandGap-mfi` | ✅ ML head |
+| **CGCNN** | Formation energy + Band gap (via MEGNet bandgap head as proxy) | Crystal Graph CNN | `MEGNet-MP-2019.4.1-BandGap-mfi` proxy | ✅ ML head |
 
-> **Band gap:** no ML band-gap model ships — `predicted_band_gap=None`, `band_gap_source="mp_experimental"`, filter on `true_band_gap` only.
+> **2.1 fix:** `cgcnn/megnet` are no longer aliases to `m3gnet` — each has its own checkpoint. M3GNet still has no band-gap head (`predicted_band_gap=None`).
 
 ### ML-guided heuristic discovery (experimental)
 

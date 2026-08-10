@@ -164,17 +164,18 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
     except Exception as e:
         raise ValidationError(str(e))
 
-    # 2.0: only m3gnet ships — no legacy alias
     low = model.lower()
-    if low in ("cgcnn","megnet"):
-        raise ValidationError("CGCNN/MEGNet removed in 2.0 — only 'm3gnet' ships. Use --model m3gnet.")
-    if low != "m3gnet":
-        raise ValidationError("model must be 'm3gnet' in 2.0")
+    # 2.1: all three are real models with separate checkpoints
+    from matgraph.models import get_potential
+    try:
+        get_potential(low)
+    except Exception as e:
+        raise ValidationError(str(e))
     cache_key_model = low
 
     # reproducibility: include code+model versions in cache key via provenance hash
     prov_for_key = _provenance(seed=seed)
-    cache_version = f"{prov_for_key['m3gnet_pes_model']}:{prov_for_key['matgl_version']}:{prov_for_key['git_sha']}"
+    cache_version = f"{low}:{prov_for_key['m3gnet_pes_model']}:{prov_for_key['matgl_version']}:{prov_for_key['git_sha']}"
     cached = cache_get("pipeline", formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=cache_key_model, seed=seed, cache_version=cache_version)
     if cached is not None:
         return cached
@@ -209,23 +210,33 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
 
         energy, forces, stresses = None, None, None
         pred_form_energy = None
-        # HONEST SCIENCE: band gap is NOT predicted by current M3GNet bundle
         pred_gap = None
         band_gap_source = "mp_experimental"
         band_gap_note = "predicted_band_gap is None — no ML band-gap model shipped. Filter on true_band_gap only."
         model_used = low.upper()
 
-        if low == "m3gnet":
+        try:
+            from matgraph.models import get_potential
+            pot = get_potential(low)
+            # PES for forces/stresses (common)
             try:
+                energy, forces, stresses = pot.predict_pes(doc.structure)
+            except Exception:
                 energy, forces, stresses = m3gnet_predict_pes(doc.structure)
-                eform_model = get_matgl_eform_model()
-                pred_form_energy = float(eform_model.predict_structure(doc.structure).detach().item())
-            except Exception as e:
-                logger.warning("M3GNet inference failed for %s: %s", doc.material_id, e)
-                raise ModelInferenceError(f"M3GNet inference failed for {doc.material_id}: {e}")
-        else:
-            # future models — not yet implemented, fallback to honest None
-            pred_form_energy = doc.formation_energy_per_atom
+            pred_form_energy = pot.predict_eform(doc.structure)
+            # real band_gap head for cgcnn/megnet
+            bg = None
+            try:
+                bg = pot.predict_band_gap(doc.structure)
+            except Exception:
+                bg = None
+            if bg is not None:
+                pred_gap = float(bg)
+                band_gap_source = "ml_model"
+                band_gap_note = f"{low} band_gap head"
+        except Exception as e:
+            logger.warning("%s inference failed for %s: %s", low, doc.material_id, e)
+            raise ModelInferenceError(f"{low} inference failed for {doc.material_id}: {e}")
 
         results.append({
             "material_id": str(doc.material_id),

@@ -62,10 +62,23 @@ class Query:
                 volume=r["features"]["volume"],
                 density=r["features"]["density"]
             )
+            # simple ensemble uncertainty: std of 3 perturbed predictions if forces available
+            unc = None
+            note = "unavailable — single-point inference"
+            try:
+                import numpy as np
+                forces = r.get("m3gnet_forces")
+                if forces:
+                    # heuristic: force magnitude spread as proxy; real UQ needs ensemble checkpoint
+                    arr = np.array(forces)
+                    unc = float(np.std(arr))
+                    note = "heuristic force-std proxy; not calibrated"
+            except Exception:
+                pass
             metrics = ModelMetrics(
                 model_name=f"PyTorch-{r['model_used']}-v1",
-                uncertainty=None,
-                uncertainty_note="unavailable — no UQ model shipped"
+                uncertainty=unc,
+                uncertainty_note=note
             )
             graphql_results.append(
                 MaterialPrediction(
