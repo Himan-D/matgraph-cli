@@ -1,6 +1,6 @@
 [project]
 name = "matgraph-cli"
-version = "1.6.0"
+version = "2.0.0"
 description = "Complete computational materials science toolkit: ML predictions, DFT bridge, stability, band structure, elastic, dielectric, magnetic, and genetic algorithm discovery"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -23,11 +23,17 @@ dependencies = [
     "matgl>=1.2.1",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+    "numpy>=1.24.0",
 ]
 
 [project.optional-dependencies]
 parquet = ["pandas>=2.0.0", "pyarrow>=12.0.0"]
 polars = ["polars>=0.19.0"]
+ml = ["matgl>=1.2.1", "torch>=2.0.0", "ase>=3.26.0"]
+dft = ["pymatgen>=2023.10.11", "ase>=3.26.0"]
+api = ["fastapi>=0.103.0", "strawberry-graphql>=0.210.0", "uvicorn>=0.23.0"]
+ui = ["gradio>=4.44.1"]
+all = ["matgraph-cli[parquet,polars,ml,dft,api,ui]"]
 dev = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "ruff>=0.2.0", "mypy>=1.8.0", "httpx>=0.24.0"]
 
 [project.scripts]

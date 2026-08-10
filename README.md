@@ -17,11 +17,11 @@ Researchers spend weeks writing boilerplate to fetch crystal data, engineer feat
 | Problem | MatGraph solution |
 |---|---|
 | Fetching crystal structures from Materials Project | `sdk.predict("LiFePO4")` |
-| Training CGCNN / MEGNet / M3GNet from scratch | Pre-wired architectures, ready to run |
-| Exploring hypothetical new materials | `matgraph substitute LiFePO4 Li Na` |
+| Running MatGL M3GNet inference | `matgraph predict LiFePO4 --model m3gnet` (only M3GNet ships in 2.x) |
+| Exploring hypothetical new materials (heuristic) | `matgraph substitute LiFePO4 Li Na` (ML-guided, not GNoME-scale) |
 | Simulating XRD patterns | `matgraph xrd LiFePO4` |
-| Serving predictions to a web app | Async GraphQL API with API key auth |
-| Caching repeated queries | Built-in SQLite cache, zero config |
+| Serving predictions to a web app | Async GraphQL + REST `/v1/predict` with hashed API keys |
+| Caching repeated queries | Reproducible SQLite cache (structure_hash + model_version) |
 
 ---
 
@@ -51,17 +51,17 @@ export MP_API_KEY="your_key_here"
 # Predict band gap and formation energy
 matgraph predict LiFePO4
 
-# Use a different model architecture
+# M3GNet is the only model shipped in 2.x (cgcnn/megnet removed until real checkpoints ship)
 matgraph predict LiFePO4 --model m3gnet
 
-# Discover new materials via elemental substitution
+# ML-guided heuristic discovery (not GNoME-scale)
 matgraph substitute LiFePO4 Li Na
 
 # Simulate X-Ray Diffraction pattern
 matgraph xrd LiFePO4
 
-# Evaluate model accuracy (MAE) against ground truth
-matgraph evaluate LiFePO4 --model megnet
+# Evaluate formation-energy MAE (band_gap unavailable — no UQ model)
+matgraph evaluate LiFePO4 --model m3gnet
 
 # Filter by physical constraints
 matgraph predict LiFePO4 --min-gap 1.5 --crystal-system Cubic
@@ -91,9 +91,9 @@ print("Stable" if discovery["is_more_stable"] else "Unstable")
 # XRD simulation
 xrd = sdk.xrd("LiFePO4")
 
-# Model evaluation
-metrics = sdk.evaluate("LiFePO4", model="megnet")
-print(f"Band gap MAE: {metrics['band_gap_mae']}")
+# Model evaluation — band_gap MAE is None until a real band-gap model ships
+metrics = sdk.evaluate("LiFePO4", model="m3gnet")
+print(f"Formation energy MAE: {metrics['formation_energy_mae']}")
 ```
 
 ### GraphQL API
@@ -126,21 +126,22 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 
 ## Features
 
-### Deep Learning Models
+### Deep Learning Models (2.x — M3GNet only)
 
-| Model | Predicts | Architecture |
-|---|---|---|
-| **CGCNN** | Band gap, Formation energy | Crystal Graph Convolutional Neural Network |
-| **MEGNet** | Band gap, Formation energy | MatErials Graph Network |
-| **M3GNet** | Energy, Forces, Stresses | Multi-body interaction universal potential |
+| Model | Predicts | Architecture | Status |
+|---|---|---|---|
+| **M3GNet** | Energy, Forces, Stresses, Formation energy (via MatGL) | Multi-body universal potential | ✅ Ships (`M3GNet-PES-MatPES-PBE-2025.2`) |
+| CGCNN/MEGNet | — | Graph networks | ❌ Removed in 2.0 until real checkpoints/benchmarks ship (was alias to M3GNet) |
 
-### Generative Discovery (GNoME-inspired)
+> **Band gap:** no ML band-gap model ships — `predicted_band_gap=None`, `band_gap_source="mp_experimental"`, filter on `true_band_gap` only.
 
-Inspired by [Google DeepMind's GNoME](https://deepmind.google/discover/blog/millions-of-new-materials-discovered-with-deep-learning/) paper. Substitute elements in known stable materials and predict whether the hypothetical new compound is thermodynamically stable -- without synthesizing it in a lab.
+### ML-guided heuristic discovery (experimental)
+
+Heuristic elemental substitution + simple GA ranking via M3GNet energies. Useful for triage, **not** GNoME-scale generative discovery.
 
 ```bash
 matgraph substitute LiFePO4 Li Na
-# Predicts: NaFePO4 stability vs LiFePO4
+# Predicts: NaFePO4 stability vs LiFePO4 (heuristic, validate with DFT)
 ```
 
 ### XRD Simulation
@@ -151,24 +152,22 @@ Generate theoretical Cu-Ka X-Ray Diffraction patterns for any material. Useful f
 matgraph xrd LiFePO4
 ```
 
-### Built-in Cache
+### Reproducible cache (2.0)
 
-All API responses and predictions are automatically cached in a local SQLite database (`~/.matgraph_cache/cache.db`). Repeated queries return instantly. No external service required.
+SQLite + WAL at `~/.matgraph_cache/cache.db` (override `MATGRAPH_CACHE_DIR`), key = `material_id+structure_hash+model+checkpoint+code_version+params`. Reproducibility via `provenance` field on every prediction.
 
 ```bash
 matgraph cache stats    # View cache size and entry count
 matgraph cache clear    # Wipe the cache
 ```
 
-### API Key Authentication
+### Hashed API keys (2.0)
 
-Generate secure, multi-tenant API keys for the GraphQL server:
+Keys are `mg_*`, stored as `sha256` with `scopes/expiry/revocation` in `~/.matgraph_keys.json` (override `MATGRAPH_AUTH_KEYS_FILE`). `MATGRAPH_API_KEY` master key still supported. Not multi-tenant authz — local research use.
 
 ```bash
 matgraph auth generate --user "research-team-A"
 ```
-
-Keys are prefixed with `mg_`, stored in `~/.matgraph_keys.json`, and validated on every request. You can also set a master key via the `MATGRAPH_API_KEY` environment variable.
 
 ### Dataset Export
 
@@ -184,16 +183,22 @@ matgraph predict LiFePO4 --save results.json --format json --cif
 
 ```
 matgraph/
-  __init__.py      # Top-level SDK export
-  sdk.py           # Python SDK (MatGraphSDK class)
-  cli.py           # Typer CLI with Rich formatting
-  core.py          # Pipeline orchestration and feature extraction
-  cgcnn.py         # Crystal Graph Convolutional Neural Network
-  megnet.py        # MatErials Graph Network
-  m3gnet.py        # M3GNet Universal Potential
-  graphql_app.py   # FastAPI + Strawberry GraphQL server
-  auth.py          # API key generation and validation
-  cdn.py           # SQLite cache layer
+  __init__.py
+  sdk.py           # SDK (predict/substitute/xrd/... + DataFrame)
+  cli.py           # Typer CLI
+  core.py          # Orchestration shim (re-exports data/models/...)
+  client.py        # Materials Project client
+  models.py        # M3GNet registry (settings.pes_model)
+  schemas.py       # Pydantic validation, no hardcodes
+  settings.py      # Central MATGRAPH_* settings
+  cdn.py           # WAL SQLite cache
+  auth.py          # sha256 keys + scopes/expiry
+  ga.py            # Heuristic GA (param-driven)
+  graphql_app.py   # GraphQL + REST /v1/predict + /health
+  data/            # (v2 split) materials_project
+  simulation/      # xrd/phonon/relax
+  dft/             # vasp/qe input generation
+  properties/      # stability/elastic/...
 ```
 
 ### Tech Stack

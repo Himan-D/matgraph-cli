@@ -49,11 +49,10 @@ class PredictRequest(BaseModel):
     @classmethod
     def _model(cls, v: str) -> str:
         low = v.lower()
-        if low not in {"m3gnet","chgnet","alignn","cgcnn","megnet"}:
-            raise ValueError("model must be m3gnet | chgnet | alignn (cgcnn/megnet are legacy aliases for m3gnet)")
-        # normalize legacy
         if low in {"cgcnn","megnet"}:
-            return "m3gnet"
+            raise ValueError("CGCNN/MEGNet removed in 2.0 — only 'm3gnet' ships until real checkpoints/benchmarks are added. Use --model m3gnet.")
+        if low not in {"m3gnet"}:
+            raise ValueError("model must be 'm3gnet' in 2.0 (chgnet/alignn planned)")
         return low
 
 class MaterialFeaturesSchema(BaseModel):

@@ -16,7 +16,8 @@ class MaterialFeatures:
 @strawberry.type
 class ModelMetrics:
     model_name: str
-    confidence_score: float
+    uncertainty: typing.Optional[float] = None
+    uncertainty_note: str = "unavailable — no UQ model shipped (was hardcoded 0.92)"
 
 @strawberry.type
 class MaterialPrediction:
@@ -24,9 +25,9 @@ class MaterialPrediction:
     formula: str
     crystal_system: str
     true_band_gap: typing.Optional[float]
-    predicted_band_gap: float
+    predicted_band_gap: typing.Optional[float]
     true_form_energy: typing.Optional[float]
-    predicted_form_energy: float
+    predicted_form_energy: typing.Optional[float]
     features: MaterialFeatures
     metrics: ModelMetrics
 
@@ -63,7 +64,8 @@ class Query:
             )
             metrics = ModelMetrics(
                 model_name=f"PyTorch-{r['model_used']}-v1",
-                confidence_score=0.94 if r['model_used'] == "CGCNN" else 0.92
+                uncertainty=None,
+                uncertainty_note="unavailable — no UQ model shipped"
             )
             graphql_results.append(
                 MaterialPrediction(

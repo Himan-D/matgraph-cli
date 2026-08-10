@@ -164,13 +164,18 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
     except Exception as e:
         raise ValidationError(str(e))
 
-    # normalize model alias
+    # 2.0: only m3gnet ships — no legacy alias
     low = model.lower()
     if low in ("cgcnn","megnet"):
-        low = "m3gnet"
+        raise ValidationError("CGCNN/MEGNet removed in 2.0 — only 'm3gnet' ships. Use --model m3gnet.")
+    if low != "m3gnet":
+        raise ValidationError("model must be 'm3gnet' in 2.0")
     cache_key_model = low
 
-    cached = cache_get("pipeline", formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=cache_key_model, seed=seed)
+    # reproducibility: include code+model versions in cache key via provenance hash
+    prov_for_key = _provenance(seed=seed)
+    cache_version = f"{prov_for_key['m3gnet_pes_model']}:{prov_for_key['matgl_version']}:{prov_for_key['git_sha']}"
+    cached = cache_get("pipeline", formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=cache_key_model, seed=seed, cache_version=cache_version)
     if cached is not None:
         return cached
 
@@ -242,7 +247,7 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
         })
 
     serializable = [{k: v for k, v in r.items() if k != "structure"} for r in results]
-    cache_put("pipeline", serializable, formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=cache_key_model, seed=seed)
+    cache_put("pipeline", serializable, formula=formula, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=cache_key_model, seed=seed, cache_version=cache_version)
     return results
 
 def save_results(results: List[dict], output_file: str, file_format: str):

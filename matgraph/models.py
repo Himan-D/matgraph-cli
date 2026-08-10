@@ -51,7 +51,7 @@ REGISTRY = {
 def get_potential(name: str = "m3gnet") -> Potential:
     key = name.lower()
     if key in ("cgcnn","megnet"):
-        key = "m3gnet"
+        raise ValueError("CGCNN/MEGNet removed in 2.0 — only 'm3gnet' ships. Use --model m3gnet.")
     if key not in REGISTRY:
         raise ValueError(f"Unknown model '{name}'. Available: {sorted(REGISTRY)}")
     return REGISTRY[key]()
