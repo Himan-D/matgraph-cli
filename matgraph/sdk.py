@@ -1,6 +1,6 @@
 import os
 from typing import Optional, List, Dict, Any
-from matgraph.core import run_pipeline, substitute_material, simulate_xrd, fetch_materials_data
+from matgraph.core import run_pipeline, substitute_material, simulate_xrd, fetch_materials_data, fetch_phonon_dos
 
 class MatGraphSDK:
     """
@@ -83,3 +83,16 @@ class MatGraphSDK:
             raise ValueError(f"No crystal structure found for {formula}")
             
         return simulate_xrd(docs[0].structure)
+        
+    def phonon_dos(self, formula: str, method: str = "dfpt") -> Dict[str, Any]:
+        """
+        Fetches the Phonon Density of States (DOS) for the most stable polymorph of a formula.
+        
+        Args:
+            formula: Chemical formula (e.g., 'Si', 'NaCl')
+            method: 'dfpt', 'finite_difference', or 'line_mode'
+            
+        Returns:
+            Dictionary containing frequencies and densities arrays.
+        """
+        return fetch_phonon_dos(formula, self.api_key, phonon_method=method)

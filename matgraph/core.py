@@ -200,3 +200,32 @@ def save_results(results: List[dict], output_file: str, file_format: str):
                     "volume": r["features"]["volume"],
                 }
                 writer.writerow(row)
+
+def fetch_phonon_dos(formula: str, api_key: str, phonon_method: str = "dfpt"):
+    """
+    Fetches the Phonon Density of States (DOS) for a given material formula.
+    Uses the dfpt method by default.
+    """
+    docs = fetch_materials_data(formula, api_key)
+    if not docs:
+        raise ValueError(f"Could not find baseline data for {formula}.")
+        
+    with MPRester(api_key) as mpr:
+        for doc in docs:
+            mat_id = str(doc.material_id)
+            try:
+                dos = mpr.materials.phonon.get_dos_from_material_id(mat_id, phonon_method=phonon_method)
+                if dos:
+                    return {
+                        "material_id": mat_id,
+                        "formula": formula,
+                        "phonon_method": phonon_method,
+                        "frequencies": list(dos.frequencies),
+                        "densities": list(dos.densities)
+                    }
+            except Exception as e:
+                # Some materials might not have phonon data; continue to the next polymorph
+                continue
+                
+        raise ValueError(f"Phonon DOS data not found for any polymorph of {formula} using method {phonon_method}.")
+

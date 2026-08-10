@@ -76,6 +76,37 @@ class Query:
                 )
             )
         return graphql_results
+        
+    @strawberry.field(description="Fetch Phonon Density of States (DOS)")
+    async def phonon_dos(
+        self,
+        formula: str,
+        method: typing.Optional[str] = "dfpt"
+    ) -> "PhononDOS":
+        from matgraph.core import fetch_phonon_dos
+        api_key = os.environ.get("MP_API_KEY")
+        if not api_key:
+            raise Exception("MP_API_KEY environment variable is missing.")
+            
+        raw_result = await asyncio.to_thread(
+            fetch_phonon_dos, formula, api_key, method
+        )
+        
+        return PhononDOS(
+            material_id=strawberry.ID(raw_result["material_id"]),
+            formula=raw_result["formula"],
+            phonon_method=raw_result["phonon_method"],
+            frequencies=raw_result["frequencies"],
+            densities=raw_result["densities"]
+        )
+
+@strawberry.type
+class PhononDOS:
+    material_id: strawberry.ID
+    formula: str
+    phonon_method: str
+    frequencies: typing.List[float]
+    densities: typing.List[float]
 
 schema = strawberry.Schema(query=Query)
 graphql_app = GraphQLRouter(schema)

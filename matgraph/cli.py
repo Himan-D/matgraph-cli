@@ -271,6 +271,32 @@ def substitute(formula: str, elem_out: str, elem_in: str):
         console.print(f"[red]Substitution Error: {e}[/red]")
 
 @app.command()
+def phonon(formula: str, method: str = typer.Option("dfpt", "--method", help="Phonon calculation method ('dfpt', 'finite_difference', 'line_mode')")):
+    """
+    Fetch and display the Phonon Density of States (DOS).
+    """
+    from matgraph.core import fetch_phonon_dos
+    api_key = os.environ.get("MP_API_KEY")
+    if not api_key:
+        console.print("[red]Error: MP_API_KEY is not set.[/red]")
+        raise typer.Exit(code=1)
+        
+    console.print(f"[cyan]Fetching Phonon DOS for {formula} using method '{method}'...[/cyan]")
+    try:
+        dos_data = fetch_phonon_dos(formula, api_key, phonon_method=method)
+        freqs = dos_data["frequencies"]
+        densities = dos_data["densities"]
+        
+        console.print(f"\n[bold magenta]Phonon DOS for {formula} ({dos_data['material_id']})[/bold magenta]")
+        console.print(f"Data points: {len(freqs)}")
+        console.print(f"Frequency range: {min(freqs):.2f} to {max(freqs):.2f} THz")
+        console.print(f"Max Density: {max(densities):.4f}")
+        console.print(f"[dim]Use the SDK (matgraph.sdk) or API for full data export.[/dim]\n")
+        
+    except Exception as e:
+        console.print(f"[red]Phonon Error: {e}[/red]")
+
+@app.command()
 def serve(port: int = 8000):
     """Start the robust GraphQL API server."""
     api_key = os.environ.get("MP_API_KEY")
