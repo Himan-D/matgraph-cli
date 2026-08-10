@@ -6,6 +6,7 @@ from typing import Optional
 from matgraph.core import run_pipeline, save_results, substitute_material, simulate_xrd
 from matgraph.sdk import MatGraphSDK
 from matgraph.auth import generate_api_key
+from matgraph.config import get_api_key, save_api_key
 
 import sys
 import importlib.metadata
@@ -62,9 +63,9 @@ def main(
 @app.command()
 def setup(api_key: str):
     """Set up your Materials Project API Key."""
-    console.print(f"[green]Setup Instructions:[/green]")
-    console.print("To use the CLI and API, export your API key in your terminal:")
-    console.print(f'[bold cyan]export MP_API_KEY="{api_key}"[/bold cyan]')
+    save_api_key(api_key)
+    console.print(f"[bold green]Success![/bold green] Materials Project API key saved securely.")
+    console.print("[dim]It is stored in ~/.matgraph/config.json[/dim]")
 
 @app.command()
 def predict(
@@ -78,7 +79,7 @@ def predict(
     cif: bool = typer.Option(False, "--cif", help="Export the raw crystal structure of the results to .cif files")
 ):
     """Run the complete ML pipeline with advanced search filters and data saving."""
-    api_key = os.environ.get("MP_API_KEY")
+    api_key = get_api_key()
     if not api_key:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
         raise typer.Exit(code=1)
@@ -155,7 +156,7 @@ def predict(
 def xrd(formula: str):
     """Simulate X-Ray Diffraction (XRD) patterns for materials."""
     from matgraph.core import fetch_materials_data, simulate_xrd
-    api_key = os.environ.get("MP_API_KEY")
+    api_key = get_api_key()
     if not api_key:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
         raise typer.Exit(code=1)
@@ -196,7 +197,7 @@ def xrd(formula: str):
 @app.command()
 def evaluate(formula: str, model: str = typer.Option("m3gnet", "--model", help="Model to evaluate")):
     """Evaluate model accuracy (MAE) against true Materials Project data."""
-    api_key = os.environ.get("MP_API_KEY")
+    api_key = get_api_key()
     if not api_key:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
         raise typer.Exit(code=1)
@@ -238,7 +239,7 @@ def substitute(formula: str, elem_out: str, elem_in: str):
     e.g., matgraph substitute LiFePO4 Li Na
     """
     from matgraph.core import substitute_material
-    api_key = os.environ.get("MP_API_KEY")
+    api_key = get_api_key()
     if not api_key:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
         raise typer.Exit(code=1)
@@ -276,7 +277,7 @@ def phonon(formula: str, method: str = typer.Option("dfpt", "--method", help="Ph
     Fetch and display the Phonon Density of States (DOS).
     """
     from matgraph.core import fetch_phonon_dos
-    api_key = os.environ.get("MP_API_KEY")
+    api_key = get_api_key()
     if not api_key:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
         raise typer.Exit(code=1)
@@ -372,7 +373,7 @@ def relax(
 @app.command()
 def serve(port: int = 8000):
     """Start the robust GraphQL API server."""
-    api_key = os.environ.get("MP_API_KEY")
+    api_key = get_api_key()
     if not api_key:
         console.print("[yellow]Warning: MP_API_KEY is not set. GraphQL queries will fail.[/yellow]")
         

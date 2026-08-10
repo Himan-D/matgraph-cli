@@ -1,6 +1,7 @@
 import os
 from typing import Optional, List, Dict, Any
 from matgraph.core import run_pipeline, substitute_material, simulate_xrd, fetch_materials_data, fetch_phonon_dos, inverse_design, relax_structure
+from matgraph.config import get_api_key
 
 class MatGraphSDK:
     """
@@ -8,9 +9,9 @@ class MatGraphSDK:
     Perfect for Jupyter Notebooks, ML pipelines, and custom Python scripts.
     """
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or os.environ.get("MP_API_KEY")
+        self.api_key = api_key or get_api_key()
         if not self.api_key:
-            raise ValueError("Materials Project API key is required. Pass it or set MP_API_KEY.")
+            raise ValueError("Materials Project API key is required. Run 'matgraph setup <KEY>' or set MP_API_KEY.")
 
     def predict(self, formula: str, model: str = "m3gnet", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None) -> List[Dict[str, Any]]:
         """
