@@ -1,6 +1,10 @@
 import os
 from typing import Optional, List, Dict, Any
-from matgraph.core import run_pipeline, substitute_material, simulate_xrd, fetch_materials_data, fetch_phonon_dos, inverse_design, relax_structure
+from matgraph.core import (
+    run_pipeline, substitute_material, simulate_xrd, fetch_materials_data,
+    fetch_phonon_dos, inverse_design, relax_structure, export_dft,
+    stability_hull, fetch_band_structure, fetch_elastic, fetch_dielectric, fetch_magnetic
+)
 from matgraph.config import get_api_key
 
 class MatGraphSDK:
@@ -125,3 +129,62 @@ class MatGraphSDK:
         from matgraph.ga import CrystalGA
         ga = CrystalGA(base_formula=formula, api_key=self.api_key, population_size=population_size)
         return ga.run(generations=generations)
+
+    def export_dft(self, formula: str, code: str = "vasp", output_dir: str = "dft_inputs") -> Dict[str, Any]:
+        """
+        Pre-relax a structure with M3GNet, then write VASP or Quantum Espresso input files.
+
+        Args:
+            formula: Chemical formula (e.g., 'Si', 'LiFePO4')
+            code: 'vasp' or 'qe'
+            output_dir: Directory to write DFT files to
+
+        Returns:
+            Dictionary with 'code', 'directory', and 'files_written'.
+        """
+        return export_dft(formula, self.api_key, code=code, output_dir=output_dir)
+
+    def stability(self, formula: str) -> List[Dict[str, Any]]:
+        """
+        Check thermodynamic stability (convex hull distance) for all polymorphs.
+
+        Returns:
+            List with energy_above_hull and stability_label (Stable/Metastable/Unstable).
+        """
+        return stability_hull(formula, self.api_key)
+
+    def band_structure(self, formula: str) -> Dict[str, Any]:
+        """
+        Fetch the electronic band structure summary (VBM, CBM, gap, metal/insulator).
+
+        Returns:
+            Dictionary with band_gap, vbm, cbm, is_metal, nbands, kpoints.
+        """
+        return fetch_band_structure(formula, self.api_key)
+
+    def elastic(self, formula: str) -> List[Dict[str, Any]]:
+        """
+        Fetch elastic constants: Bulk/Shear modulus (VRH), Poisson ratio, anisotropy.
+
+        Returns:
+            List of dictionaries with elastic properties per polymorph.
+        """
+        return fetch_elastic(formula, self.api_key)
+
+    def dielectric(self, formula: str) -> List[Dict[str, Any]]:
+        """
+        Fetch dielectric constants (total, electronic, ionic) and refractive index.
+
+        Returns:
+            List of dictionaries with dielectric properties.
+        """
+        return fetch_dielectric(formula, self.api_key)
+
+    def magnetic(self, formula: str) -> List[Dict[str, Any]]:
+        """
+        Fetch magnetic properties: ordering (FM/AFM/NM) and total magnetization.
+
+        Returns:
+            List of dictionaries with magnetic properties.
+        """
+        return fetch_magnetic(formula, self.api_key)

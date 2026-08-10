@@ -413,12 +413,177 @@ def evolve(
             console.print(f"[bold red]Error during evolution: {e}[/bold red]")
 
 @app.command()
+def dft(
+    formula: str,
+    code: str = typer.Option("vasp", "--code", help="DFT code: 'vasp' or 'qe'"),
+    output_dir: str = typer.Option("dft_inputs", "--output-dir", help="Output directory for DFT files"),
+    api_key: str = typer.Option(None, envvar="MP_API_KEY"),
+):
+    """
+    ML-to-DFT bridge: pre-relax with M3GNet, then write VASP or Quantum Espresso input files.
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    console.print(f"[cyan]Pre-relaxing {formula} with M3GNet and generating {code.upper()} inputs...[/cyan]")
+    try:
+        result = sdk.export_dft(formula, code=code, output_dir=output_dir)
+        console.print(f"[bold green]DFT inputs written to: {result['directory']}[/bold green]")
+        for f in result["files_written"]:
+            console.print(f"  - {f}")
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+
+
+@app.command()
+def stability(
+    formula: str,
+    api_key: str = typer.Option(None, envvar="MP_API_KEY"),
+):
+    """
+    Check thermodynamic stability (convex hull distance) for all polymorphs of a material.
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    with console.status(f"[bold green]Checking convex hull stability for {formula}..."):
+        try:
+            results = sdk.stability(formula)
+            table = Table(title=f"Convex Hull Stability: {formula}")
+            table.add_column("Material ID", style="cyan")
+            table.add_column("Formula", style="magenta")
+            table.add_column("E_above_hull (eV/atom)", justify="right", style="blue")
+            table.add_column("Status", justify="center")
+            for r in results:
+                color = "green" if r["stability_label"] == "Stable" else (
+                    "yellow" if r["stability_label"] == "Metastable" else "red"
+                )
+                table.add_row(
+                    r["material_id"], r["formula"],
+                    f"{r['energy_above_hull']:.4f}",
+                    f"[{color}]{r['stability_label']}[/{color}]"
+                )
+            console.print(table)
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+
+
+@app.command()
+def bands(
+    formula: str,
+    api_key: str = typer.Option(None, envvar="MP_API_KEY"),
+):
+    """
+    Fetch and display the electronic band structure summary (VBM, CBM, gap, metal/insulator).
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    with console.status(f"[bold green]Fetching band structure for {formula}..."):
+        try:
+            result = sdk.band_structure(formula)
+            console.print(f"[bold cyan]Band Structure: {formula} ({result['material_id']})[/bold cyan]")
+            console.print(f"  Metal:           {result['is_metal']}")
+            console.print(f"  Band Gap:        {result['band_gap']:.3f} eV")
+            console.print(f"  VBM:             {result['vbm']:.3f} eV")
+            console.print(f"  CBM:             {result['cbm']:.3f} eV")
+            console.print(f"  Number of Bands: {result['nbands']}")
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+
+
+@app.command()
+def elastic(
+    formula: str,
+    api_key: str = typer.Option(None, envvar="MP_API_KEY"),
+):
+    """
+    Fetch and display elastic constants (Bulk/Shear modulus, Poisson ratio, anisotropy).
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    with console.status(f"[bold green]Fetching elastic properties for {formula}..."):
+        try:
+            results = sdk.elastic(formula)
+            table = Table(title=f"Elastic Constants: {formula}")
+            table.add_column("Material ID", style="cyan")
+            table.add_column("K_vrh (GPa)", justify="right", style="blue")
+            table.add_column("G_vrh (GPa)", justify="right", style="magenta")
+            table.add_column("Poisson Ratio", justify="right", style="yellow")
+            table.add_column("Anisotropy", justify="right")
+            for r in results:
+                table.add_row(
+                    r["material_id"],
+                    f"{r['bulk_modulus_vrh']:.1f}" if r["bulk_modulus_vrh"] else "N/A",
+                    f"{r['shear_modulus_vrh']:.1f}" if r["shear_modulus_vrh"] else "N/A",
+                    f"{r['homogeneous_poisson']:.3f}" if r["homogeneous_poisson"] else "N/A",
+                    f"{r['universal_anisotropy']:.3f}" if r["universal_anisotropy"] else "N/A",
+                )
+            console.print(table)
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+
+
+@app.command()
+def dielectric(
+    formula: str,
+    api_key: str = typer.Option(None, envvar="MP_API_KEY"),
+):
+    """
+    Fetch dielectric constants (total, electronic, ionic) and refractive index.
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    with console.status(f"[bold green]Fetching dielectric properties for {formula}..."):
+        try:
+            results = sdk.dielectric(formula)
+            table = Table(title=f"Dielectric Constants: {formula}")
+            table.add_column("Material ID", style="cyan")
+            table.add_column("e_total", justify="right")
+            table.add_column("e_ionic", justify="right")
+            table.add_column("e_electronic", justify="right")
+            table.add_column("Refractive Index (n)", justify="right", style="magenta")
+            for r in results:
+                table.add_row(
+                    r["material_id"],
+                    f"{r['e_total']:.3f}" if r["e_total"] else "N/A",
+                    f"{r['e_ionic']:.3f}" if r["e_ionic"] else "N/A",
+                    f"{r['e_electronic']:.3f}" if r["e_electronic"] else "N/A",
+                    f"{r['refractive_index']:.3f}" if r["refractive_index"] else "N/A",
+                )
+            console.print(table)
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+
+
+@app.command()
+def magnetic(
+    formula: str,
+    api_key: str = typer.Option(None, envvar="MP_API_KEY"),
+):
+    """
+    Fetch magnetic properties (ordering, total magnetization) for a material.
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    with console.status(f"[bold green]Fetching magnetic properties for {formula}..."):
+        try:
+            results = sdk.magnetic(formula)
+            table = Table(title=f"Magnetic Properties: {formula}")
+            table.add_column("Material ID", style="cyan")
+            table.add_column("Formula", style="magenta")
+            table.add_column("Ordering", style="blue")
+            table.add_column("Total Magnetization (uB)", justify="right")
+            for r in results:
+                table.add_row(
+                    r["material_id"],
+                    r["formula"],
+                    r["ordering"],
+                    f"{r['total_magnetization']:.3f}" if r["total_magnetization"] is not None else "N/A",
+                )
+            console.print(table)
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+
+
+@app.command()
 def serve(port: int = 8000):
     """Start the robust GraphQL API server."""
     api_key = get_api_key()
     if not api_key:
         console.print("[yellow]Warning: MP_API_KEY is not set. GraphQL queries will fail.[/yellow]")
-        
+
     console.print(f"[green]Starting modern GraphQL server on port {port}...[/green]")
     console.print(f"[cyan]Explore the API at http://localhost:{port}/graphql[/cyan]")
     import uvicorn

@@ -3623,7 +3623,7 @@ wheels = [
 
 [[package]]
 name = "matgraph-cli"
-version = "1.5.1"
+version = "1.6.0"
 source = { editable = "." }
 dependencies = [
     { name = "ase", version = "3.26.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.10'" },

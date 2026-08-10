@@ -1,7 +1,7 @@
 [project]
 name = "matgraph-cli"
-version = "1.5.1"
-description = "A modern CLI and GraphQL API tool for Material Science DL Pipelines"
+version = "1.6.0"
+description = "Complete computational materials science toolkit: ML predictions, DFT bridge, stability, band structure, elastic, dielectric, magnetic, and genetic algorithm discovery"
 readme = "README.md"
 requires-python = ">=3.9"
 authors = [

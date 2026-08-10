@@ -308,3 +308,207 @@ def relax_structure(formula: str, api_key: str, steps: int = 10):
         "steps_taken": len(energy_history),
         "relaxed_structure": relaxed_structure
     }
+
+def export_dft(formula: str, api_key: str, code: str = "vasp", output_dir: str = "dft_inputs"):
+    """
+    Bridge ML to DFT: Pre-relax the structure using M3GNet and write DFT input files.
+    """
+    import os
+    
+    # 1. Relax the structure very quickly using ML
+    relax_results = relax_structure(formula, api_key, steps=20)
+    structure = relax_results["relaxed_structure"]
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        
+    out_path = os.path.join(output_dir, formula)
+    if not os.path.exists(out_path):
+        os.makedirs(out_path)
+        
+    # 2. Generate DFT Inputs
+    if code.lower() == "vasp":
+        from pymatgen.io.vasp.sets import MPRelaxSet
+        # Use MPRelaxSet for standard Materials Project parameters
+        vis = MPRelaxSet(structure)
+        vis.write_input(out_path)
+        return {"code": "VASP", "directory": out_path, "files_written": ["POSCAR", "INCAR", "KPOINTS", "POTCAR"]}
+        
+    elif code.lower() in ["qe", "pwscf", "quantum_espresso"]:
+        from pymatgen.io.pwscf import PWInput
+        # Generate a standard self-consistent field (scf) input for QE
+        pseudo_dir = os.environ.get("PSEUDO_DIR", ".")
+        pseudopotentials = {str(el): f"{el}.UPF" for el in structure.composition.elements}
+        
+        control = {"calculation": "scf", "pseudo_dir": pseudo_dir}
+        system = {"ecutwfc": 50, "ecutrho": 200}
+        electrons = {"conv_thr": 1e-6}
+        
+        pw_in = PWInput(
+            structure=structure,
+            pseudo=pseudopotentials,
+            control=control,
+            system=system,
+            electrons=electrons,
+            kpoints_grid=(4, 4, 4)
+        )
+        pw_in.write_file(os.path.join(out_path, f"{formula}.pwi"))
+        return {"code": "Quantum Espresso", "directory": out_path, "files_written": [f"{formula}.pwi"]}
+        
+    else:
+        raise ValueError(f"Unsupported DFT code: {code}. Use 'vasp' or 'qe'.")
+
+
+def stability_hull(formula: str, api_key: str) -> List[dict]:
+    """
+    Check where a material sits on the convex hull (thermodynamic phase diagram).
+    energy_above_hull = 0 means on the hull (stable). >0 means metastable/unstable.
+    """
+    from mp_api.client import MPRester
+
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.summary.search(
+            formula=formula,
+            fields=["material_id", "formula_pretty", "formation_energy_per_atom",
+                    "energy_above_hull", "is_stable"]
+        )
+
+    if not docs:
+        raise ValueError(f"No data found for {formula}")
+
+    results = []
+    for d in docs:
+        hull_e = d.energy_above_hull or 0.0
+        if hull_e == 0.0:
+            label = "Stable"
+        elif hull_e < 0.05:
+            label = "Metastable"
+        else:
+            label = "Unstable"
+        results.append({
+            "material_id": str(d.material_id),
+            "formula": d.formula_pretty,
+            "formation_energy_per_atom": d.formation_energy_per_atom,
+            "energy_above_hull": hull_e,
+            "is_stable": d.is_stable,
+            "stability_label": label,
+        })
+    return results
+
+
+def fetch_band_structure(formula: str, api_key: str) -> dict:
+    """
+    Fetch the electronic band structure summary for the most stable polymorph.
+    Returns band gap, VBM, CBM, and whether the material is metallic.
+    """
+    from mp_api.client import MPRester
+
+    docs = fetch_materials_data(formula, api_key)
+    if not docs:
+        raise ValueError(f"No data for {formula}")
+
+    with MPRester(api_key) as mpr:
+        for doc in docs:
+            mat_id = str(doc.material_id)
+            try:
+                bs = mpr.get_bandstructure_by_material_id(mat_id)
+                if bs is None:
+                    continue
+                return {
+                    "material_id": mat_id,
+                    "formula": formula,
+                    "band_gap": bs.get_band_gap()["energy"],
+                    "is_metal": bs.is_metal(),
+                    "vbm": bs.get_vbm()["energy"],
+                    "cbm": bs.get_cbm()["energy"],
+                    "nbands": bs.nb_bands,
+                    "kpoints": [k.frac_coords.tolist() for k in bs.kpoints],
+                }
+            except Exception:
+                continue
+    raise ValueError(f"No band structure data found for any polymorph of {formula}")
+
+
+def fetch_elastic(formula: str, api_key: str) -> List[dict]:
+    """
+    Fetch elastic constants (bulk/shear modulus, Poisson ratio, anisotropy) from MP.
+    """
+    from mp_api.client import MPRester
+
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.elasticity.search(
+            formula=formula,
+            fields=["material_id", "formula_pretty", "bulk_modulus",
+                    "shear_modulus", "universal_anisotropy", "homogeneous_poisson"]
+        )
+
+    if not docs:
+        raise ValueError(f"No elastic data for {formula}. Not all materials have DFT elastic tensors.")
+
+    results = []
+    for d in docs:
+        results.append({
+            "material_id": str(d.material_id),
+            "formula": d.formula_pretty,
+            "bulk_modulus_vrh": d.bulk_modulus.vrh if d.bulk_modulus else None,
+            "shear_modulus_vrh": d.shear_modulus.vrh if d.shear_modulus else None,
+            "universal_anisotropy": d.universal_anisotropy,
+            "homogeneous_poisson": d.homogeneous_poisson,
+        })
+    return results
+
+
+def fetch_dielectric(formula: str, api_key: str) -> List[dict]:
+    """
+    Fetch dielectric constants (total, electronic, ionic) and refractive index from MP.
+    """
+    from mp_api.client import MPRester
+
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.dielectric.search(
+            formula=formula,
+            fields=["material_id", "formula_pretty", "e_total", "e_ionic", "e_electronic", "n"]
+        )
+
+    if not docs:
+        raise ValueError(f"No dielectric data for {formula}.")
+
+    results = []
+    for d in docs:
+        results.append({
+            "material_id": str(d.material_id),
+            "formula": d.formula_pretty,
+            "e_total": d.e_total,
+            "e_ionic": d.e_ionic,
+            "e_electronic": d.e_electronic,
+            "refractive_index": d.n,
+        })
+    return results
+
+
+def fetch_magnetic(formula: str, api_key: str) -> List[dict]:
+    """
+    Fetch magnetic properties (ordering, total magnetization) from MP.
+    """
+    from mp_api.client import MPRester
+
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.magnetism.search(
+            formula=formula,
+            fields=["material_id", "formula_pretty", "ordering",
+                    "total_magnetization", "total_magnetization_normalized_vol"]
+        )
+
+    if not docs:
+        raise ValueError(f"No magnetic data for {formula}.")
+
+    results = []
+    for d in docs:
+        results.append({
+            "material_id": str(d.material_id),
+            "formula": d.formula_pretty,
+            "ordering": str(d.ordering),
+            "total_magnetization": d.total_magnetization,
+            "magnetization_per_vol": d.total_magnetization_normalized_vol,
+        })
+    return results
