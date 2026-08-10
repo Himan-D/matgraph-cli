@@ -54,7 +54,7 @@ def simulate_xrd(structure):
     return {
         "two_theta": pattern.x.tolist(),
         "intensity": pattern.y.tolist(),
-        "hkls": [[hkl[0] for hkl in hkls] for hkls in pattern.hkls]
+        "hkls": [[hkl["hkl"] for hkl in hkls] for hkls in pattern.hkls]
     }
 
 def substitute_material(formula: str, elem_out: str, elem_in: str, api_key: str):
