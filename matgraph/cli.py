@@ -371,6 +371,48 @@ def relax(
             console.print(f"[bold red]Error during relaxation: {e}[/bold red]")
 
 @app.command()
+def evolve(
+    formula: str,
+    population: int = typer.Option(10, "--population", help="Number of structures in each generation"),
+    generations: int = typer.Option(5, "--generations", help="Number of generations to evolve"),
+    api_key: str = typer.Option(None, envvar="MP_API_KEY", help="Materials Project API Key")
+):
+    """
+    Genetic Algorithm Discovery: Evolve crystal structures to find more stable alternatives.
+    """
+    from matgraph.sdk import MatGraphSDK
+    sdk = MatGraphSDK(api_key=api_key)
+    
+    console.print(f"[bold cyan]🧬 Starting Genetic Algorithm Evolution for {formula}[/bold cyan]")
+    console.print(f"Population Size: {population} | Generations: {generations}")
+    
+    with console.status(f"[bold green]Running Generation Evolution (Evaluating M3GNet Energies)..."):
+        try:
+            history = sdk.evolve(formula, population_size=population, generations=generations)
+            
+            console.print("\n[bold green]Evolution Complete![/bold green]")
+            table = Table(title="Evolution History (Best per Generation)")
+            table.add_column("Gen", justify="right", style="cyan")
+            table.add_column("Best Formula", style="magenta")
+            table.add_column("Formation Energy (eV/atom)", justify="right", style="blue")
+            
+            for entry in history:
+                table.add_row(
+                    str(entry["generation"]),
+                    entry["best_formula"],
+                    f"{entry['best_fitness']:.4f}"
+                )
+                
+            console.print(table)
+            
+            best_all_time = history[-1]
+            console.print(f"\n[bold yellow]🏆 Top Discovered Material:[/bold yellow] [bold magenta]{best_all_time['best_formula']}[/bold magenta]")
+            console.print(f"Predicted Formation Energy: {best_all_time['best_fitness']:.4f} eV/atom")
+            
+        except Exception as e:
+            console.print(f"[bold red]Error during evolution: {e}[/bold red]")
+
+@app.command()
 def serve(port: int = 8000):
     """Start the robust GraphQL API server."""
     api_key = get_api_key()

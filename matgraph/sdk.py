@@ -117,3 +117,11 @@ class MatGraphSDK:
         Relax a crystal structure using the MatGraph Universal Potential (M3GNet) and ASE.
         """
         return relax_structure(formula, self.api_key, steps=steps)
+
+    def evolve(self, formula: str, population_size: int = 10, generations: int = 5) -> List[Dict[str, Any]]:
+        """
+        Run a Genetic Algorithm to discover new stable structures derived from a base formula.
+        """
+        from matgraph.ga import CrystalGA
+        ga = CrystalGA(base_formula=formula, api_key=self.api_key, population_size=population_size)
+        return ga.run(generations=generations)
