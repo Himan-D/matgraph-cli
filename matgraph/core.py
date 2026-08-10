@@ -39,13 +39,26 @@ def extract_features(structure):
 from matgraph.cgcnn import cgcnn_predict
 from matgraph.megnet import megnet_predict
 
-def m3gnet_predict(features):
-    from matgraph.m3gnet import M3GNet
-    model = M3GNet()
-    model.eval()
-    import torch
-    with torch.no_grad():
-        return model(features)
+def get_matgl_pes_model():
+    import matgl
+    return matgl.load_model("M3GNet-PES-MatPES-PBE-2025.2")
+
+def get_matgl_bandgap_model():
+    import matgl
+    return matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
+
+def m3gnet_predict_pes(structure):
+    from matgl.ext.ase import M3GNetCalculator
+    from pymatgen.io.ase import AseAtomsAdaptor
+    
+    pot = get_matgl_pes_model()
+    atoms = AseAtomsAdaptor.get_atoms(structure)
+    atoms.calc = M3GNetCalculator(potential=pot)
+    
+    energy = atoms.get_potential_energy()
+    forces = atoms.get_forces()
+    stresses = atoms.get_stress()
+    return energy, forces, stresses
 
 def simulate_xrd(structure):
     from pymatgen.analysis.diffraction.xrd import XRDCalculator
@@ -59,57 +72,40 @@ def simulate_xrd(structure):
 
 def substitute_material(formula: str, elem_out: str, elem_in: str, api_key: str):
     """
-    Simulates elemental substitution (doping/alloying), a core technique in GNoME-like discovery.
-    Approximates new structural features and predicts thermodynamic stability.
+    Simulates elemental substitution using real MatGL models on structures.
     """
     from pymatgen.core import Composition
+    import numpy as np
     
     docs = fetch_materials_data(formula, api_key)
     if not docs:
         raise ValueError(f"Could not find baseline data for {formula}.")
         
     doc = docs[0]
+    if not doc.structure:
+        raise ValueError(f"No structure available in MP for {formula}.")
+        
     orig_comp = Composition(formula)
-    
     if elem_out not in orig_comp:
         raise ValueError(f"Element {elem_out} not found in {formula}.")
         
-    # Create new hypothetical composition
-    new_comp_dict = orig_comp.as_dict()
-    new_comp_dict[elem_in] = new_comp_dict.pop(elem_out)
-    new_comp = Composition(new_comp_dict)
-    new_formula = new_comp.reduced_formula
+    orig_structure = doc.structure
+    new_structure = orig_structure.copy()
+    new_structure.replace_species({elem_out: elem_in})
     
-    # Feature approximation (Vegard's law simplified: assume volume is constant for first-order estimation)
-    orig_features = extract_features(doc.structure) if doc.structure else {
-        "num_elements": len(orig_comp),
-        "mean_atomic_mass": orig_comp.weight / orig_comp.num_atoms,
-        "volume": 100.0,
-        "density": orig_comp.weight / 100.0
-    }
-    
-    new_mass = new_comp.weight / new_comp.num_atoms
-    new_features = {
-        "num_elements": len(new_comp),
-        "mean_atomic_mass": new_mass,
-        "volume": orig_features["volume"], # Assume similar volume
-        "density": (new_comp.weight / orig_comp.weight) * orig_features["density"]
-    }
-    
-    # Predict stability using M3GNet (Universal Potential)
-    orig_energy, orig_forces, _ = m3gnet_predict(orig_features)
-    new_energy, new_forces, _ = m3gnet_predict(new_features)
+    orig_energy, orig_forces, _ = m3gnet_predict_pes(orig_structure)
+    new_energy, new_forces, _ = m3gnet_predict_pes(new_structure)
     
     return {
         "original": {
             "formula": formula,
-            "energy": orig_energy,
-            "max_force": max(orig_forces) if orig_forces else 0
+            "energy": float(orig_energy),
+            "max_force": float(np.max(np.abs(orig_forces)))
         },
         "hypothetical": {
-            "formula": new_formula,
-            "energy": new_energy,
-            "max_force": max(new_forces) if new_forces else 0
+            "formula": new_structure.composition.reduced_formula,
+            "energy": float(new_energy),
+            "max_force": float(np.max(np.abs(new_forces)))
         },
         "is_more_stable": new_energy < orig_energy
     }
@@ -146,7 +142,10 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
         if model.lower() == "megnet":
             pred_gap, pred_form_energy = megnet_predict(features)
         elif model.lower() == "m3gnet":
-            energy, forces, stresses = m3gnet_predict(features)
+            energy, forces, stresses = m3gnet_predict_pes(doc.structure)
+            # Let's fallback to the true properties for gap/eform since PES doesn't predict them
+            pred_gap = doc.band_gap 
+            pred_form_energy = doc.formation_energy_per_atom
         else:
             pred_gap, pred_form_energy = cgcnn_predict(features)
             
@@ -157,9 +156,7 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
             "predicted_band_gap": pred_gap,
             "true_form_energy": doc.formation_energy_per_atom,
             "predicted_form_energy": pred_form_energy,
-            "m3gnet_energy": energy,
-            "m3gnet_forces": forces,
-            "m3gnet_stresses": stresses,
+            "m3gnet_energy": float(energy) if energy is not None else None,
             "crystal_system": c_sys,
             "features": features,
             "model_used": model.upper(),
@@ -264,11 +261,11 @@ def inverse_design(api_key: str, min_gap: float = None, max_gap: float = None, c
 
 def relax_structure(formula: str, api_key: str, steps: int = 10):
     """
-    Relax a crystal structure using the MatGraph Universal Potential (M3GNet) and ASE.
+    Relax a crystal structure using the real MatGL M3GNet Universal Potential and ASE.
     """
     from pymatgen.io.ase import AseAtomsAdaptor
     from ase.optimize import FIRE
-    from matgraph.ase_calc import MatGraphCalculator
+    from matgl.ext.ase import M3GNetCalculator
     
     docs = fetch_materials_data(formula, api_key)
     if not docs or not docs[0].structure:
@@ -278,11 +275,12 @@ def relax_structure(formula: str, api_key: str, steps: int = 10):
     
     # Introduce small random noise to the atomic positions to simulate an unrelaxed state
     import numpy as np
-    ideal_positions = structure.lattice.get_cartesian_coords(structure.frac_coords)
     structure.perturb(0.1)
     
+    pot = get_matgl_pes_model()
+    
     atoms = AseAtomsAdaptor.get_atoms(structure)
-    atoms.calc = MatGraphCalculator(ideal_positions=ideal_positions)
+    atoms.calc = M3GNetCalculator(potential=pot)
     
     # Run geometry optimization
     dyn = FIRE(atoms, logfile=None)
@@ -298,9 +296,8 @@ def relax_structure(formula: str, api_key: str, steps: int = 10):
     
     return {
         "formula": formula,
-        "initial_energy": energy_history[0] if energy_history else None,
-        "final_energy": energy_history[-1] if energy_history else None,
+        "initial_energy": float(energy_history[0]) if energy_history else None,
+        "final_energy": float(energy_history[-1]) if energy_history else None,
         "steps_taken": len(energy_history),
         "relaxed_structure": relaxed_structure
     }
-

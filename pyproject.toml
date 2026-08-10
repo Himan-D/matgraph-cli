@@ -20,6 +20,7 @@ dependencies = [
     "ase>=3.26.0",
     "huggingface-hub>=1.8.0",
     "gradio>=4.44.1",
+    "matgl>=1.2.1",
 ]
 
 
