@@ -3,10 +3,10 @@
   <p><strong>Deep Learning toolkit for Materials Science researchers.</strong></p>
   <p>Predict material properties, discover new compounds, simulate diffraction patterns, and serve predictions via API -- all from one package.</p>
 
-  [![PyPI](https://img.shields.io/pypi/v/matgraph-cli?color=blue&label=PyPI)](https://pypi.org/project/matgraph-cli/)
-  [![Python](https://img.shields.io/pypi/pyversions/matgraph-cli)](https://pypi.org/project/matgraph-cli/)
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![PyPI version](https://badge.fury.io/py/matgraph-cli.svg)](https://badge.fury.io/py/matgraph-cli)
   [![Downloads](https://static.pepy.tech/badge/matgraph-cli)](https://pepy.tech/project/matgraph-cli)
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hima-d/matgraph-cli/blob/main/notebooks/MatGraph_Tutorial.ipynb)
+  [![Hugging Face Models](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Models-blue)](https://huggingface.co/Himan-de/MatGraph-Universal-Potential)
 </div>
 
 ---

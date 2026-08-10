@@ -229,3 +229,78 @@ def fetch_phonon_dos(formula: str, api_key: str, phonon_method: str = "dfpt"):
                 
         raise ValueError(f"Phonon DOS data not found for any polymorph of {formula} using method {phonon_method}.")
 
+def inverse_design(api_key: str, min_gap: float = None, max_gap: float = None, crystal_system: str = None, exclude_elements: list = None, include_elements: list = None, limit: int = 10):
+    """
+    Inverse design: query the Materials Project for materials matching strict criteria.
+    """
+    kwargs = {
+        "num_chunks": 1,
+        "chunk_size": limit,
+        "fields": ["material_id", "formula_pretty", "band_gap", "symmetry", "is_stable"]
+    }
+    
+    if min_gap is not None or max_gap is not None:
+        kwargs["band_gap"] = (min_gap or 0.0, max_gap or 10.0)
+    if crystal_system:
+        kwargs["crystal_system"] = crystal_system
+    if exclude_elements:
+        kwargs["exclude_elements"] = exclude_elements
+    if include_elements:
+        kwargs["elements"] = include_elements
+
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.summary.search(**kwargs)
+        
+    results = []
+    for d in docs:
+        results.append({
+            "material_id": str(d.material_id),
+            "formula": d.formula_pretty,
+            "band_gap": d.band_gap,
+            "crystal_system": str(d.symmetry.crystal_system),
+            "is_stable": d.is_stable
+        })
+    return results
+
+def relax_structure(formula: str, api_key: str, steps: int = 10):
+    """
+    Relax a crystal structure using the MatGraph Universal Potential (M3GNet) and ASE.
+    """
+    from pymatgen.io.ase import AseAtomsAdaptor
+    from ase.optimize import FIRE
+    from matgraph.ase_calc import MatGraphCalculator
+    
+    docs = fetch_materials_data(formula, api_key)
+    if not docs or not docs[0].structure:
+        raise ValueError(f"No structure found for {formula}")
+        
+    structure = docs[0].structure
+    
+    # Introduce small random noise to the atomic positions to simulate an unrelaxed state
+    import numpy as np
+    ideal_positions = structure.lattice.get_cartesian_coords(structure.frac_coords)
+    structure.perturb(0.1)
+    
+    atoms = AseAtomsAdaptor.get_atoms(structure)
+    atoms.calc = MatGraphCalculator(ideal_positions=ideal_positions)
+    
+    # Run geometry optimization
+    dyn = FIRE(atoms, logfile=None)
+    
+    energy_history = []
+    def observer():
+        energy_history.append(atoms.get_potential_energy())
+        
+    dyn.attach(observer)
+    dyn.run(fmax=0.05, steps=steps)
+    
+    relaxed_structure = AseAtomsAdaptor.get_structure(atoms)
+    
+    return {
+        "formula": formula,
+        "initial_energy": energy_history[0] if energy_history else None,
+        "final_energy": energy_history[-1] if energy_history else None,
+        "steps_taken": len(energy_history),
+        "relaxed_structure": relaxed_structure
+    }
+

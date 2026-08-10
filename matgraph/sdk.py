@@ -1,6 +1,6 @@
 import os
 from typing import Optional, List, Dict, Any
-from matgraph.core import run_pipeline, substitute_material, simulate_xrd, fetch_materials_data, fetch_phonon_dos
+from matgraph.core import run_pipeline, substitute_material, simulate_xrd, fetch_materials_data, fetch_phonon_dos, inverse_design, relax_structure
 
 class MatGraphSDK:
     """
@@ -96,3 +96,23 @@ class MatGraphSDK:
             Dictionary containing frequencies and densities arrays.
         """
         return fetch_phonon_dos(formula, self.api_key, phonon_method=method)
+
+    def design(self, min_gap: float = None, max_gap: float = None, crystal_system: str = None, exclude_elements: List[str] = None, include_elements: List[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+        """
+        Inverse design: Generates or searches for materials that match specific properties.
+        """
+        return inverse_design(
+            api_key=self.api_key,
+            min_gap=min_gap,
+            max_gap=max_gap,
+            crystal_system=crystal_system,
+            exclude_elements=exclude_elements,
+            include_elements=include_elements,
+            limit=limit
+        )
+
+    def relax(self, formula: str, steps: int = 10) -> Dict[str, Any]:
+        """
+        Relax a crystal structure using the MatGraph Universal Potential (M3GNet) and ASE.
+        """
+        return relax_structure(formula, self.api_key, steps=steps)

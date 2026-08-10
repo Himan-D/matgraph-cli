@@ -285,16 +285,89 @@ def phonon(formula: str, method: str = typer.Option("dfpt", "--method", help="Ph
     try:
         dos_data = fetch_phonon_dos(formula, api_key, phonon_method=method)
         freqs = dos_data["frequencies"]
-        densities = dos_data["densities"]
-        
-        console.print(f"\n[bold magenta]Phonon DOS for {formula} ({dos_data['material_id']})[/bold magenta]")
-        console.print(f"Data points: {len(freqs)}")
-        console.print(f"Frequency range: {min(freqs):.2f} to {max(freqs):.2f} THz")
-        console.print(f"Max Density: {max(densities):.4f}")
-        console.print(f"[dim]Use the SDK (matgraph.sdk) or API for full data export.[/dim]\n")
+        if method == "dfpt" and dos_data.get("frequencies") is not None:
+            console.print(f"Phonon DOS fetched successfully via {method} for {formula}.")
+            console.print(f"Number of frequency points: {len(dos_data['frequencies'])}")
+            
+            # Simple text-based plot simulation
+            console.print("[bold cyan]Frequency vs DOS (Preview):[/bold cyan]")
+            step = max(1, len(dos_data['frequencies']) // 10)
+            for i in range(0, len(dos_data['frequencies']), step):
+                freq = dos_data['frequencies'][i]
+                dens = dos_data['densities'][i]
+                bar = "#" * int(dens * 10)
+                console.print(f"{freq:8.2f} THz | {bar}")
+        else:
+            console.print(f"Fetched Phonon data for {formula} via {method}.")
         
     except Exception as e:
         console.print(f"[red]Phonon Error: {e}[/red]")
+
+@app.command()
+def design(
+    min_gap: float = typer.Option(0.0, "--min-gap", help="Minimum band gap (eV)"),
+    max_gap: float = typer.Option(10.0, "--max-gap", help="Maximum band gap (eV)"),
+    crystal_system: str = typer.Option(None, "--crystal-system", help="Target crystal system (e.g. Cubic, Hexagonal)"),
+    exclude: str = typer.Option(None, "--exclude", help="Comma-separated elements to exclude"),
+    include: str = typer.Option(None, "--include", help="Comma-separated elements to include"),
+    limit: int = typer.Option(10, "--limit", help="Max results to fetch"),
+    api_key: str = typer.Option(None, envvar="MP_API_KEY", help="Materials Project API Key")
+):
+    """
+    Inverse design: Search for materials by target properties.
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    exclude_elements = exclude.split(",") if exclude else None
+    include_elements = include.split(",") if include else None
+    
+    with console.status(f"[bold green]Searching for materials with gap {min_gap}-{max_gap} eV..."):
+        results = sdk.design(
+            min_gap=min_gap, max_gap=max_gap, 
+            crystal_system=crystal_system, 
+            exclude_elements=exclude_elements,
+            include_elements=include_elements,
+            limit=limit
+        )
+        
+    if not results:
+        console.print("[bold red]No materials found matching criteria.[/bold red]")
+        return
+        
+    table = Table(title=f"Inverse Design Results ({len(results)} found)")
+    table.add_column("Formula", style="cyan")
+    table.add_column("Band Gap (eV)", style="magenta")
+    table.add_column("Crystal System", style="blue")
+    table.add_column("Stable?", style="green")
+    
+    for r in results:
+        stable_str = "Yes" if r["is_stable"] else "No"
+        table.add_row(r["formula"], f"{r['band_gap']:.3f}", r["crystal_system"], stable_str)
+        
+    console.print(table)
+    
+@app.command()
+def relax(
+    formula: str,
+    steps: int = typer.Option(10, "--steps", help="Number of relaxation steps"),
+    api_key: str = typer.Option(None, envvar="MP_API_KEY", help="Materials Project API Key")
+):
+    """
+    Relax a crystal structure using the MatGraph Universal Potential (M3GNet) and ASE.
+    """
+    sdk = MatGraphSDK(api_key=api_key)
+    with console.status(f"[bold green]Relaxing {formula} structure with M3GNet + ASE for {steps} steps..."):
+        try:
+            result = sdk.relax(formula, steps=steps)
+            
+            console.print(f"[bold cyan]Relaxation Complete for {formula}![/bold cyan]")
+            console.print(f"Steps taken: {result['steps_taken']}")
+            console.print(f"Initial Energy: {result['initial_energy']:.4f} eV")
+            console.print(f"Final Energy: {result['final_energy']:.4f} eV")
+            delta_e = result['final_energy'] - result['initial_energy']
+            console.print(f"Energy Change: {delta_e:.4f} eV")
+            
+        except Exception as e:
+            console.print(f"[bold red]Error during relaxation: {e}[/bold red]")
 
 @app.command()
 def serve(port: int = 8000):
