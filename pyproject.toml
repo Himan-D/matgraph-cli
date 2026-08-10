@@ -1,6 +1,6 @@
 [project]
 name = "matgraph-cli"
-version = "1.5.0"
+version = "1.5.1"
 description = "A modern CLI and GraphQL API tool for Material Science DL Pipelines"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -26,6 +26,13 @@ dependencies = [
 
 [project.scripts]
 matgraph = "matgraph.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/Himan-D/matgraph-cli"
+Documentation = "https://github.com/Himan-D/matgraph-cli/blob/main/README.md"
+Repository = "https://github.com/Himan-D/matgraph-cli.git"
+"Bug Tracker" = "https://github.com/Himan-D/matgraph-cli/issues"
+"Try in Colab" = "https://colab.research.google.com/github/Himan-D/matgraph-cli/blob/main/notebooks/MatGraph_Tutorial.ipynb"
 
 [build-system]
 requires = ["hatchling"]
