@@ -12,12 +12,14 @@ import sys
 import importlib.metadata
 
 app = typer.Typer(help="MatGraph CLI: Deep Learning for Material Science", no_args_is_help=True)
-api_app = typer.Typer(help="Manage API keys for the GraphQL Server")
+api_app = typer.Typer(help="Manage API keys for the GraphQL Server (like gh auth)")
 cache_app = typer.Typer(help="Manage the local query cache")
 track_app = typer.Typer(help="W&B-like experiment tracking for materials")
+config_app = typer.Typer(help="Manage config (like gh config)")
 app.add_typer(api_app, name="auth")
 app.add_typer(cache_app, name="cache")
 app.add_typer(track_app, name="track")
+app.add_typer(config_app, name="config")
 console = Console()
 
 @cache_app.command("stats")
@@ -38,11 +40,42 @@ def cache_clear_cmd():
 
 @api_app.command("generate")
 def generate_key(user: str = typer.Option(..., "--user", "-u", help="Username or identifier for this API key")):
-    """Generates a secure API key for authenticating with the MatGraph GraphQL Server."""
+    """Generates a secure API key for authenticating with the MatGraph GraphQL Server (like gh auth)."""
     console.print(f"[bold cyan]Generating API Key for {user}...[/bold cyan]")
     key = generate_api_key(user)
     console.print(f"[bold green]Success![/bold green] Your API Key is: [bold yellow]{key}[/bold yellow]")
     console.print("[bold red]Please save this key securely! It grants access to the GraphQL API.[/bold red]")
+
+@api_app.command("status")
+def auth_status():
+    """Show auth status (like gh auth status)."""
+    from matgraph.auth import load_keys
+    from matgraph.config import get_api_key, get_wandb_key
+    mp = "set" if get_api_key() else "not set (set MP_API_KEY or matgraph setup)"
+    wb = "set" if get_wandb_key() else "not set (matgraph track login)"
+    keys = load_keys()
+    active = sum(1 for v in keys.values() if v.get("active"))
+    console.print(f"MP_API_KEY: [bold]{mp}[/bold]")
+    console.print(f"W&B API key: [bold]{wb}[/bold]")
+    console.print(f"GraphQL keys: [bold]{active} active[/bold] in ~/.matgraph_keys.json")
+    if mp=="not set":
+        console.print("[yellow]Hint: export MP_API_KEY=... or matgraph setup <key>[/yellow]")
+
+@api_app.command("login")
+def auth_login(api_key: str = typer.Option(None, "--api-key", help="Materials Project API key")):
+    """Login to Materials Project (like gh auth login)."""
+    import getpass
+    if not api_key:
+        api_key = getpass.getpass("MP_API_KEY: ").strip() or typer.prompt("MP_API_KEY", hide_input=True)
+    save_api_key(api_key)
+    console.print("[green]MP_API_KEY saved to ~/.matgraph/config.json[/green]")
+
+@api_app.command("logout")
+def auth_logout():
+    """Logout (clear stored keys)."""
+    from matgraph.config import set_config_value
+    set_config_value("mp_api_key", None)
+    console.print("[green]MP_API_KEY cleared[/green]")
 
 def version_callback(value: bool):
     if value:
@@ -637,6 +670,37 @@ def track_show(run: str = typer.Argument(..., help="Run ID")):
     console.print(f"Metrics: {r['metrics'][-5:]}")
     console.print(f"Artifacts: {r['artifacts']}")
 
+@track_app.command("login")
+def track_login(api_key: str = typer.Option(None, "--api-key", "-k", help="W&B API key (or set WANDB_API_KEY)"), host: str = typer.Option(None, "--host", "-h", help="W&B base URL for private instance (WANDB_BASE_URL)")):
+    """Store W&B secrets — like `wandb login`. Supports `export WANDB_API_KEY` too."""
+    import getpass
+    from matgraph.config import save_wandb_key, get_wandb_key
+    if not api_key:
+        # prompt securely if not passed
+        try:
+            api_key = getpass.getpass("Enter W&B API key (WANDB_API_KEY): ").strip()
+        except Exception:
+            api_key = typer.prompt("Enter W&B API key", hide_input=True)
+    if not api_key:
+        console.print("[red]No API key provided. Set WANDB_API_KEY env or pass --api-key[/red]"); raise typer.Exit(1)
+    save_wandb_key(api_key, host=host)
+    masked = api_key[:4] + "*"*(len(api_key)-8) + api_key[-4:] if len(api_key)>8 else "***"
+    console.print(f"[green]W&B API key saved to ~/.matgraph/config.json ({masked})[/green]")
+    if host:
+        console.print(f"[cyan]W&B host set to {host}[/cyan]")
+    # verify
+    from matgraph.config import get_wandb_key
+    if get_wandb_key():
+        console.print("[dim]Try: WANDB_MODE=online matgraph track init --project my-proj  (or sdk.predict(track=True))[/dim]")
+
+@track_app.command("logout")
+def track_logout():
+    """Remove stored W&B secrets."""
+    from matgraph.config import clear_wandb_key
+    clear_wandb_key()
+    console.print("[green]W&B secrets cleared from ~/.matgraph/config.json[/green]")
+    console.print("[dim]Also run: wandb logout  and unset WANDB_API_KEY if set in env[/dim]")
+
 @track_app.command("sweep")
 def track_sweep(project: str = typer.Option("matgraph", "--project", "-p"), count: int = typer.Option(5, "--count", "-c", help="Number of trials")):
     """W&B sweep-like: random search over GA hyperparams."""
@@ -669,6 +733,64 @@ def track_dashboard(port: int = typer.Option(8001, "--port")):
         demo.launch(server_port=port)
     except Exception as e:
         console.print(f"[red]Dashboard error: {e}[/red]")
+
+@config_app.command("get")
+def config_get(key: str = typer.Argument(..., help="Key, e.g. mp_api_key, wandb_api_key, cache_dir")):
+    """Get config value (like gh config get)."""
+    from matgraph.config import get_config_value
+    val = get_config_value(key)
+    console.print(f"{key} = {val}")
+
+@config_app.command("set")
+def config_set(key: str = typer.Argument(...), value: str = typer.Argument(...)):
+    """Set config value (like gh config set)."""
+    from matgraph.config import set_config_value
+    set_config_value(key, value)
+    console.print(f"[green]Set {key} = {value}[/green]")
+
+@config_app.command("list")
+def config_list():
+    """List all config (like gh config list)."""
+    from matgraph.settings import settings
+    import json, pathlib
+    cfg_path = settings.config_file
+    if cfg_path.exists():
+        console.print(cfg_path.read_text())
+    else:
+        console.print("[yellow]No config file yet[/yellow]")
+    # also show env overrides
+    for k in ["MP_API_KEY","WANDB_API_KEY","MATGRAPH_CACHE_DIR","MATGRAPH_TRACKING_DIR"]:
+        if k in os.environ:
+            console.print(f"[dim]{k}={os.environ[k]} (env)[/dim]")
+
+@app.command()
+def status():
+    """Show overall status (like gh status)."""
+    from matgraph.cdn import cache_stats
+    from matgraph.config import get_api_key, get_wandb_key
+    from matgraph.auth import load_keys
+    from matgraph.tracking.store import list_runs
+    from matgraph.models import available_models
+    console.print("[bold cyan]MatGraph Status[/bold cyan]")
+    console.print(f"MP_API_KEY: {'set' if get_api_key() else 'not set'}")
+    console.print(f"W&B: {'set' if get_wandb_key() else 'not set'}")
+    try:
+        s=cache_stats()
+        console.print(f"Cache: {s['entries']} entries, {s['size_mb']} MB at {s['location']}")
+    except Exception:
+        pass
+    try:
+        runs=list_runs()
+        console.print(f"Tracking: {len(runs)} runs")
+    except Exception:
+        pass
+    console.print(f"Models: {', '.join(available_models())}")
+    # try wandb
+    try:
+        import wandb
+        console.print(f"wandb: {wandb.__version__} installed")
+    except Exception:
+        console.print("wandb: not installed (pip install matgraph-cli[tracking])")
 
 @app.command()
 def serve(port: int = 8000):
