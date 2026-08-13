@@ -85,6 +85,7 @@ def version_callback(value: bool):
             version = "unknown"
         console.print(f"MatGraph CLI Version: [bold green]{version}[/bold green]")
         console.print(f"Python Version: [bold cyan]{sys.version.split()[0]}[/bold cyan]")
+        console.print(f"[dim]⭐ If this saved you time, star https://github.com/Himan-D/matgraph-cli[/dim]")
         raise typer.Exit()
 
 @app.callback()

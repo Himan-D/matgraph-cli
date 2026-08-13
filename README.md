@@ -5,7 +5,10 @@
 
   [![PyPI version](https://badge.fury.io/py/matgraph-cli.svg)](https://badge.fury.io/py/matgraph-cli)
   [![Downloads](https://static.pepy.tech/badge/matgraph-cli)](https://pepy.tech/project/matgraph-cli)
+  [![GitHub stars](https://img.shields.io/github/stars/Himan-D/matgraph-cli?style=social)](https://github.com/Himan-D/matgraph-cli)
   [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Himan-D/matgraph-cli/blob/main/notebooks/MatGraph_Tutorial.ipynb)
+  <br/>
+  <p>⭐ <strong>If this saved you time, star <a href="https://github.com/Himan-D/matgraph-cli">Himan-D/matgraph-cli</a> — it helps others discover it!</strong></p>
 </div>
 
 ---

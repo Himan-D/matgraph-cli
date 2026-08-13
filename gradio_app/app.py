@@ -40,6 +40,7 @@ with gr.Blocks(title="MatGraph CLI: Deep Learning for Material Science", theme=g
             
     btn.click(fn=predict_material, inputs=[formula_input, api_input], outputs=[output_table])
     
-    gr.Markdown("Powered by [matgraph-cli](https://pypi.org/project/matgraph-cli/)")
+    gr.Markdown("Powered by [matgraph-cli](https://pypi.org/project/matgraph-cli/) — ⭐ [Star on GitHub](https://github.com/Himan-D/matgraph-cli) if this saved you time!")
+    gr.Markdown("If this helped, ⭐ star [Himan-D/matgraph-cli](https://github.com/Himan-D/matgraph-cli) — it helps others discover it!")
 
 demo.launch()
