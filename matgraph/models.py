@@ -1,4 +1,4 @@
-"""Pluggable potential registry — M3GNet + real CGCNN/MEGNet via matgl/megnet."""
+"""Pluggable potential registry — M3GNet + MEGNet + CGCNN + CHGNet (MatGL FMMs)."""
 from __future__ import annotations
 import os
 from functools import lru_cache
@@ -126,10 +126,46 @@ class MEGNetPotential:
         except Exception:
             return None
 
+class CHGNetPotential:
+    """CHGNet FMM via MatGL — materialyze/CHGNet-MP-2024.2.13 or fallback."""
+    @staticmethod
+    @lru_cache(maxsize=1)
+    def _pes():
+        import matgl
+        for name in ["CHGNet-MP-2024.2.13", "CHGNet-MP-2023.9.1", "M3GNet-PES-MatPES-PBE-2025.2"]:
+            try:
+                return matgl.load_model(name)
+            except Exception:
+                continue
+        raise RuntimeError("No CHGNet/M3GNet PES available — pip install matgraph-cli[ml]")
+
+    def predict_pes(self, structure):
+        from matgl.ext.ase import M3GNetCalculator
+        from pymatgen.io.ase import AseAtomsAdaptor
+        # CHGNet uses same ASE calculator interface via matgl
+        try:
+            import matgl.ext.ase as ext
+            # try CHGNetCalculator if present
+            calc_cls = getattr(ext, "CHGNetCalculator", None) or getattr(ext, "M3GNetCalculator")
+        except Exception:
+            from matgl.ext.ase import M3GNetCalculator as calc_cls
+        pot = self._pes()
+        atoms = AseAtomsAdaptor.get_atoms(structure)
+        atoms.calc = calc_cls(potential=pot)
+        return atoms.get_potential_energy(), atoms.get_forces(), atoms.get_stress()
+
+    def predict_eform(self, structure) -> float:
+        # CHGNet is PES-only; use M3GNet Eform head for formation energy
+        return M3GNetPotential().predict_eform(structure)
+
+    def predict_band_gap(self, structure) -> float | None:
+        return None
+
 REGISTRY = {
     "m3gnet": M3GNetPotential,
     "cgcnn": CGCNNPotential,
     "megnet": MEGNetPotential,
+    "chgnet": CHGNetPotential,
 }
 
 def get_potential(name: str = "m3gnet") -> Potential:

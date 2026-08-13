@@ -49,8 +49,8 @@ class PredictRequest(BaseModel):
     @classmethod
     def _model(cls, v: str) -> str:
         low = v.lower()
-        if low not in {"m3gnet","cgcnn","megnet"}:
-            raise ValueError("model must be one of m3gnet|cgcnn|megnet (m3gnet is default, cgcnn/megnet require optional deps)")
+        if low not in {"m3gnet","cgcnn","megnet","chgnet"}:
+            raise ValueError("model must be one of m3gnet|cgcnn|megnet|chgnet")
         return low
 
 class MaterialFeaturesSchema(BaseModel):

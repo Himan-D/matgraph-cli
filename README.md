@@ -128,15 +128,16 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 
 ## Features
 
-### Deep Learning Models (2.1 — all three are real)
+### Deep Learning Models (2.2 — four FMMs)
 
 | Model | Predicts | Architecture | Checkpoint | Band gap |
 |---|---|---|---|---|
-| **M3GNet** | Energy, Forces, Stresses, Formation energy | Multi-body universal potential | `M3GNet-PES-MatPES-PBE-2025.2` + `M3GNet-Eform-MP-2019.4.1` | `None` (no head, use `true_band_gap`) |
-| **MEGNet** | Formation energy + Band gap | MatErials Graph Network | `MEGNet-MP-2019.4.1-Eform` + `MEGNet-MP-2019.4.1-BandGap-mfi` | ✅ ML head |
-| **CGCNN** | Formation energy + Band gap (via MEGNet bandgap head as proxy) | Crystal Graph CNN | `MEGNet-MP-2019.4.1-BandGap-mfi` proxy | ✅ ML head |
+| **M3GNet** | Energy, Forces, Stresses, Formation energy | Multi-body universal potential | `M3GNet-PES-MatPES-PBE-2025.2` + `M3GNet-Eform-MP-2019.4.1` | `None` |
+| **MEGNet** | Formation energy + Band gap | MatErials Graph Network | `MEGNet-BandGap-mfi-MP-2019.4.1` | ✅ |
+| **CGCNN** | Formation energy + Band gap | Crystal Graph CNN | `MEGNet-BandGap-mfi` proxy | ✅ |
+| **CHGNet** | Energy, Forces, Stresses (FMM) | Crystal Hamiltonian GNN | `CHGNet-MP-2024.2.13` → fallback `M3GNet-PES` | `None` |
 
-> **2.1 fix:** `cgcnn/megnet` are no longer aliases to `m3gnet` — each has its own checkpoint. M3GNet still has no band-gap head (`predicted_band_gap=None`).
+> **2.2:** Added **CHGNet** per [MatGL](https://arxiv.org/abs/2503.03837v1) — `M3GNet+MEGNet+CGCNN+CHGNet` cover invariant+equivariant FMMs.
 
 ### ML-guided heuristic discovery (experimental)
 
