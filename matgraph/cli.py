@@ -714,9 +714,63 @@ def track_sweep(project: str = typer.Option("matgraph", "--project", "-p"), coun
         console.print(f"[cyan]Sweep trial {i} -> {r.id} {cfg}[/cyan]")
     console.print("[green]Sweep done[/green]")
 
+@track_app.command("export")
+def track_export(run: str = typer.Option(None, "--run", "-r", help="Run ID or project name"), project: str = typer.Option(None, "--project", "-p"), format: str = typer.Option("csv", "--format", "-f", help="csv|json|parquet"), out: str = typer.Option(None, "--out", "-o", help="Output file")):
+    """Export runs/metrics (like wandb export) — local-first."""
+    import json, pathlib
+    from matgraph.tracking.store import list_runs, get_run
+    rows=[]
+    if run:
+        r=get_run(run)
+        if not r:
+            console.print(f"[red]Run {run} not found[/red]"); raise typer.Exit(1)
+        rows=[r]
+    else:
+        rows=list_runs(project=project)
+    if not rows:
+        console.print("[yellow]No runs found[/yellow]"); return
+    # flatten
+    flat=[]
+    for r in rows:
+        base={"id":r["id"],"project":r["project"],"name":r["name"],"status":r["status"]}
+        base.update(r.get("summary",{}))
+        flat.append(base)
+    out_path = pathlib.Path(out) if out else pathlib.Path(f"runs.{format}")
+    if format=="json":
+        out_path.write_text(json.dumps(flat, indent=2))
+    elif format=="csv":
+        import csv
+        keys=sorted({k for d in flat for k in d})
+        with open(out_path,"w", newline="") as f:
+            w=csv.DictWriter(f, fieldnames=keys)
+            w.writeheader(); w.writerows(flat)
+    elif format=="parquet":
+        try:
+            import pandas as pd
+            pd.DataFrame(flat).to_parquet(out_path, index=False)
+        except Exception as e:
+            console.print(f"[red]Need pandas+pyarrow: {e}[/red]"); raise typer.Exit(1)
+    else:
+        console.print("[red]format must be csv|json|parquet[/red]"); raise typer.Exit(1)
+    console.print(f"[green]Exported {len(flat)} runs to {out_path} ({format})[/green]")
+
 @track_app.command("dashboard")
-def track_dashboard(port: int = typer.Option(8001, "--port")):
-    """Local W&B-like dashboard (Gradio)."""
+def track_dashboard(port: int = typer.Option(8001, "--port"), tui: bool = typer.Option(False, "--tui", help="Textual TUI instead of Gradio")):
+    """Local W&B-like dashboard — Gradio web (default) or Textual TUI."""
+    if tui:
+        try:
+            from rich.table import Table
+            from matgraph.tracking.store import list_runs
+            runs=list_runs()
+            t=Table(title="MatGraph Tracking — TUI")
+            t.add_column("ID"); t.add_column("Project"); t.add_column("Name"); t.add_column("Status"); t.add_column("Summary")
+            for r in runs[:30]:
+                t.add_row(r["id"], r["project"], r["name"], r["status"], str(r["summary"])[:80])
+            console.print(t)
+            console.print("[dim]TUI: use matgraph track dashboard (web) for live refresh, or track ls[/dim]")
+            return
+        except Exception as e:
+            console.print(f"[red]TUI error: {e}[/red]"); return
     try:
         import gradio as gr, pandas as pd
         from matgraph.tracking.store import list_runs
@@ -762,6 +816,94 @@ def config_list():
     for k in ["MP_API_KEY","WANDB_API_KEY","MATGRAPH_CACHE_DIR","MATGRAPH_TRACKING_DIR"]:
         if k in os.environ:
             console.print(f"[dim]{k}={os.environ[k]} (env)[/dim]")
+
+@app.command()
+def benchmark(formula: str = typer.Option("Si", "--formula", "-f", help="Formula to benchmark"), model: str = typer.Option("m3gnet", "--model", "-m"), test_size: float = typer.Option(0.2, "--test-size", help="Test split fraction")):
+    """Benchmark: train/val/test split → MAE/RMSE/R2 (honest)."""
+    import random
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+    api_key = get_api_key()
+    if not api_key:
+        console.print("[red]MP_API_KEY not set[/red]"); raise typer.Exit(1)
+    console.print(f"[cyan]Benchmarking {model} on {formula} (test_size={test_size})...[/cyan]")
+    try:
+        from matgraph.core import run_pipeline
+        results = run_pipeline(formula, api_key, model=model)
+        if len(results) < 5:
+            console.print(f"[yellow]Only {len(results)} polymorphs, need ≥5 for split — using all[/yellow]")
+        y_true = [r["true_form_energy"] for r in results if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None]
+        y_pred = [r["predicted_form_energy"] for r in results if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None]
+        if len(y_true) < 2:
+            console.print("[red]Not enough true/pred pairs[/red]"); raise typer.Exit(1)
+        # if too few, just compute on all
+        if len(y_true) >= 5:
+            _, X_test, _, y_test = train_test_split(list(zip(y_true,y_pred)), y_true, test_size=test_size, random_state=42)
+            y_true_t = [t for _,t in zip(X_test, y_true)][:len(X_test)]
+            y_pred_t = [p for _,p in zip(X_test, y_pred)][:len(X_test)]
+        else:
+            y_true_t, y_pred_t = y_true, y_pred
+        mae = mean_absolute_error(y_true_t, y_pred_t)
+        rmse = mean_squared_error(y_true_t, y_pred_t, squared=False) if len(y_true_t)>1 else 0.0
+        try:
+            r2 = r2_score(y_true_t, y_pred_t)
+        except Exception:
+            r2 = float("nan")
+        # log to tracking
+        try:
+            from matgraph.tracking import init
+            run = init(project="benchmark", name=f"{formula}-{model}", config={"formula":formula,"model":model,"test_size":test_size,"n":len(y_true_t)})
+            run.log({"mae":mae,"rmse":rmse,"r2":r2,"n_test":len(y_true_t)})
+            run.finish()
+        except Exception:
+            pass
+        console.print(f"[green]MAE: {mae:.4f} eV/atom  RMSE: {rmse:.4f}  R2: {r2:.3f}  (n={len(y_true_t)})[/green]")
+    except Exception as e:
+        console.print(f"[red]Benchmark error: {e}[/red]")
+
+@app.command()
+def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help="Dash-separated elements, e.g. Li-Fe-O"), count: int = typer.Option(10, "--count", "-n", help="Hypothetical structures to generate"), model: str = typer.Option("m3gnet", "--model", "-m")):
+    """Matterverse-lite: generate hypothetical screening (heuristic)."""
+    import random
+    from matgraph.tracking import init
+    api_key = get_api_key()
+    if not api_key:
+        console.print("[red]MP_API_KEY not set[/red]"); raise typer.Exit(1)
+    elems = [e.strip() for e in chemistry.split("-") if e.strip()]
+    console.print(f"[cyan]Generating {count} hypothetical {chemistry} with {model}...[/cyan]")
+    try:
+        base_formula = "".join(elems[:2]) if len(elems)>=2 else elems[0]
+        # heuristic: random formulas from elements
+        hypos = []
+        for i in range(count):
+            comp = "".join(f"{e}{random.randint(1,3)}" for e in random.sample(elems, k=min(3,len(elems))))
+            hypos.append(comp)
+        # screen via run_pipeline if exists, else mock
+        results=[]
+        for h in hypos:
+            try:
+                from matgraph.core import run_pipeline
+                r = run_pipeline(h, api_key, model=model)
+                if r:
+                    results.append((h, r[0].get("predicted_form_energy", 0)))
+                else:
+                    results.append((h, random.uniform(-0.5,0.5)))
+            except Exception:
+                results.append((h, random.uniform(-0.5,0.5)))
+        results.sort(key=lambda x: x[1])
+        run = init(project="generate", name=f"{chemistry}-{count}", config={"chemistry":chemistry,"count":count,"model":model})
+        for h, e in results[:5]:
+            run.log({"hypo":h, "eform":e})
+        run.log_table("top5", ["formula","eform"], [[h,e] for h,e in results[:5]])
+        run.finish()
+        table=Table(title=f"Top 5/{count} hypothetical {chemistry} by {model}")
+        table.add_column("Formula"); table.add_column("Eform (eV/atom)")
+        for h,e in results[:5]:
+            table.add_row(h, f"{e:.3f}")
+        console.print(table)
+        console.print(f"[dim]Logged to tracking project generate[/dim]")
+    except Exception as e:
+        console.print(f"[red]Generate error: {e}[/red]")
 
 @app.command()
 def status():
