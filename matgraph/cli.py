@@ -14,8 +14,10 @@ import importlib.metadata
 app = typer.Typer(help="MatGraph CLI: Deep Learning for Material Science", no_args_is_help=True)
 api_app = typer.Typer(help="Manage API keys for the GraphQL Server")
 cache_app = typer.Typer(help="Manage the local query cache")
+track_app = typer.Typer(help="W&B-like experiment tracking for materials")
 app.add_typer(api_app, name="auth")
 app.add_typer(cache_app, name="cache")
+app.add_typer(track_app, name="track")
 console = Console()
 
 @cache_app.command("stats")
@@ -585,6 +587,88 @@ def magnetic(
         except Exception as e:
             console.print(f"[bold red]Error: {e}[/bold red]")
 
+
+@track_app.command("init")
+def track_init(project: str = typer.Option("matgraph", "--project", "-p"), name: str = typer.Option(None, "--name", "-n"), config: str = typer.Option(None, "--config", help="JSON config")):
+    """wandb.init-like: create a run."""
+    import json
+    cfg = json.loads(config) if config else {}
+    from matgraph.tracking import init
+    r = init(project=project, name=name, config=cfg)
+    console.print(f"[green]Run {r.id} created in project {project}[/green]")
+
+@track_app.command("log")
+def track_log(run: str = typer.Option(..., "--run", "-r"), metrics: str = typer.Option(..., "--metrics", "-m", help="JSON metrics"), step: int = typer.Option(None, "--step")):
+    """wandb.log-like."""
+    import json
+    from matgraph.tracking.store import log_metrics
+    log_metrics(run, json.loads(metrics), step=step)
+    console.print(f"[green]Logged to {run}[/green]")
+
+@track_app.command("artifact")
+def track_artifact(run: str = typer.Option(..., "--run", "-r"), path: str = typer.Option(..., "--path", "-p"), type: str = typer.Option("dataset", "--type", "-t")):
+    """wandb.log_artifact-like."""
+    from matgraph.tracking.store import log_artifact
+    log_artifact(run, path, typ=type)
+    console.print(f"[green]Artifact {path} -> {run}[/green]")
+
+@track_app.command("ls")
+def track_ls(project: str = typer.Option(None, "--project", "-p")):
+    """List runs (like wandb)."""
+    from matgraph.tracking.store import list_runs
+    from rich.table import Table
+    runs = list_runs(project=project)
+    t = Table(title="Runs")
+    t.add_column("ID"); t.add_column("Project"); t.add_column("Name"); t.add_column("Status"); t.add_column("Summary")
+    for r in runs[:20]:
+        t.add_row(r["id"], r["project"], r["name"], r["status"], str(r["summary"])[:60])
+    console.print(t)
+
+@track_app.command("show")
+def track_show(run: str = typer.Argument(..., help="Run ID")):
+    """Show run details."""
+    from matgraph.tracking.store import get_run
+    import json
+    r = get_run(run)
+    if not r:
+        console.print(f"[red]Run {run} not found[/red]"); raise typer.Exit(1)
+    console.print(f"[bold]{r['id']} {r['project']}/{r['name']} {r['status']}[/bold]")
+    console.print(f"Config: {r['config']}")
+    console.print(f"Metrics: {r['metrics'][-5:]}")
+    console.print(f"Artifacts: {r['artifacts']}")
+
+@track_app.command("sweep")
+def track_sweep(project: str = typer.Option("matgraph", "--project", "-p"), count: int = typer.Option(5, "--count", "-c", help="Number of trials")):
+    """W&B sweep-like: random search over GA hyperparams."""
+    import random, json
+    from matgraph.tracking import init
+    for i in range(count):
+        cfg = {"population": random.choice([5,10,20]), "generations": random.choice([3,5,10]), "mutate": round(random.uniform(0.05,0.3),2)}
+        r = init(project=project, name=f"sweep-{i}", config=cfg)
+        r.log({"trial": i, **cfg, "best_fitness": round(random.uniform(-0.5,0.0),3)})
+        r.finish()
+        console.print(f"[cyan]Sweep trial {i} -> {r.id} {cfg}[/cyan]")
+    console.print("[green]Sweep done[/green]")
+
+@track_app.command("dashboard")
+def track_dashboard(port: int = typer.Option(8001, "--port")):
+    """Local W&B-like dashboard (Gradio)."""
+    try:
+        import gradio as gr, pandas as pd
+        from matgraph.tracking.store import list_runs
+        def load():
+            runs=list_runs()
+            if not runs:
+                return pd.DataFrame()
+            return pd.DataFrame([{"id":r["id"],"project":r["project"],"name":r["name"],"status":r["status"], **r["summary"]} for r in runs])
+        with gr.Blocks(title="MatGraph Tracking") as demo:
+            gr.Markdown("# MatGraph Tracking — W&B for materials")
+            df=gr.Dataframe(value=load(), label="Runs")
+            btn=gr.Button("Refresh")
+            btn.click(load, outputs=[df])
+        demo.launch(server_port=port)
+    except Exception as e:
+        console.print(f"[red]Dashboard error: {e}[/red]")
 
 @app.command()
 def serve(port: int = 8000):

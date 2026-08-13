@@ -15,9 +15,23 @@ class MatGraphSDK:
         if not self.api_key:
             raise ValueError("Materials Project API key is required. Run 'matgraph setup <KEY>' or set MP_API_KEY.")
 
-    def predict(self, formula: str, model: str = "m3gnet", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, seed: Optional[int] = None, as_frame: Optional[str] = None) -> Union[List[Dict[str, Any]], Any]:
-        """Predict with optional DataFrame return: as_frame='pandas'|'polars'."""
+    def predict(self, formula: str, model: str = "m3gnet", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, seed: Optional[int] = None, as_frame: Optional[str] = None, track: bool = False, project: str = "matgraph") -> Union[List[Dict[str, Any]], Any]:
+        """Predict with optional DataFrame return: as_frame='pandas'|'polars'. If track=True, logs wandb-like run."""
         results = run_pipeline(formula=formula, api_key=self.api_key, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=model, seed=seed)
+        if track:
+            try:
+                from matgraph.tracking import init
+                run = init(project=project, name=f"predict-{formula}", config={"formula":formula,"model":model,"seed":seed})
+                for r in results:
+                    run.log({"formula":r.get("formula"),"eform":r.get("predicted_form_energy"),"band_gap":r.get("true_band_gap")})
+                # log table artifact
+                try:
+                    run.log_table("predictions", ["formula","eform","band_gap"], [[r.get("formula"),r.get("predicted_form_energy"),r.get("true_band_gap")] for r in results])
+                except Exception:
+                    pass
+                run.finish()
+            except Exception:
+                pass
         if as_frame:
             return self._to_frame(results, as_frame)
         return results
