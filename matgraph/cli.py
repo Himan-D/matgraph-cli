@@ -986,8 +986,8 @@ def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir 
         console.print(f"[red]Finetune error: {e}[/red]"); raise typer.Exit(1)
 
 @app.command()
-def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), domain: str = typer.Option("all", "--domain", "-d", help="battery|catalysis|pv|thermo|2d|alloy|defect|all")):
-    """Research verticals: battery, catalysis, PV, thermo, 2D, alloys, defects — honest proxies with refs."""
+def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), domain: str = typer.Option("all", "--domain", "-d", help="battery|catalysis|pv|thermo|2d|alloy|defect|all"), use_scientific: bool = typer.Option(True, "--use-scientific/--no-scientific", help="Use pymatgen/BoltzTraP2 when installed")):
+    """Research verticals: battery, catalysis, PV, thermo, 2D, alloys, defects — ML + scientific libs."""
     from pymatgen.core import Composition
     api_key = get_api_key()
     # try fetch MP truth for gap/formation_energy/density/structure
@@ -1003,6 +1003,9 @@ def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), do
                 dens = struct.density if struct else None
         except Exception:
             pass
+    from matgraph.settings import settings as _s
+    # honor CLI flag via env-override pattern
+    _s.vertical_use_scientific = use_scientific
     domains = [domain] if domain!="all" else ["battery","catalysis","pv","thermo","2d","alloy","defect"]
     for dom in domains:
         if dom=="battery":

@@ -99,6 +99,8 @@ if _HAS_PYDANTIC_SETTINGS:
         vertical_catalysis_model: str = Field(default="m3gnet")
         vertical_thermo_model: str = Field(default="m3gnet")
         vertical_twodexfol_model: str = Field(default="m3gnet")
+        vertical_use_scientific: bool = Field(default=True)
+        vertical_checkpoint: Optional[Path] = Field(default=None)
         # physics constants (env-overridable, not hardcoded in business logic)
         faraday_constant: float = Field(default=96485.0)
         # learned DL params (env-overridable) — voltage = -eform * w + b
@@ -157,6 +159,8 @@ else:
         vertical_catalysis_model = os.getenv("MATGRAPH_VERTICAL_CATALYSIS_MODEL","m3gnet")
         vertical_thermo_model = os.getenv("MATGRAPH_VERTICAL_THERMO_MODEL","m3gnet")
         vertical_twodexfol_model = os.getenv("MATGRAPH_VERTICAL_TWODEXFOL_MODEL","m3gnet")
+        vertical_use_scientific = os.getenv("MATGRAPH_VERTICAL_USE_SCIENTIFIC","true").lower() in ("1","true","yes")
+        vertical_checkpoint = Path(os.getenv("MATGRAPH_VERTICAL_CHECKPOINT")) if os.getenv("MATGRAPH_VERTICAL_CHECKPOINT") else None
         faraday_constant = _env_float("MATGRAPH_FARADAY_CONSTANT",96485.0)
         battery_voltage_w = _env_float("MATGRAPH_BATTERY_VOLTAGE_W",0.95)
         battery_voltage_b = _env_float("MATGRAPH_BATTERY_VOLTAGE_B",2.1)
