@@ -819,66 +819,87 @@ def config_list():
             console.print(f"[dim]{k}={os.environ[k]} (env)[/dim]")
 
 @app.command()
-def benchmark(formula: str = typer.Option("Si", "--formula", "-f", help="Formula to benchmark"), model: str = typer.Option("m3gnet", "--model", "-m"), test_size: float = typer.Option(0.2, "--test-size", help="Test split fraction")):
-    """Benchmark: train/val/test split → MAE/RMSE/R2 (honest)."""
-    import random
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+def benchmark(formula: str = typer.Option("Si", "--formula", "-f", help="Formula to benchmark"), model: str = typer.Option("m3gnet", "--model", "-m"), test_size: float = typer.Option(0.2, "--test-size", help="Test split fraction"), time_split: bool = typer.Option(False, "--time-split", help="Use time-split (material_id sort) instead of random")):
+    """Benchmark: train/val/test split → MAE/RMSE/R2. Use --time-split for discovery-time evaluation."""
     api_key = get_api_key()
     if not api_key:
         console.print("[red]MP_API_KEY not set[/red]"); raise typer.Exit(1)
-    console.print(f"[cyan]Benchmarking {model} on {formula} (test_size={test_size})...[/cyan]")
+    console.print(f"[cyan]Benchmarking {model} on {formula} (test_size={test_size} time_split={time_split})...[/cyan]")
     try:
         from matgraph.core import run_pipeline
         results = run_pipeline(formula, api_key, model=model)
         if len(results) < 5:
-            console.print(f"[yellow]Only {len(results)} polymorphs, need ≥5 for split — using all[/yellow]")
-        y_true = [r["true_form_energy"] for r in results if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None]
-        y_pred = [r["predicted_form_energy"] for r in results if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None]
-        if len(y_true) < 2:
-            console.print("[red]Not enough true/pred pairs[/red]"); raise typer.Exit(1)
-        # if too few, just compute on all
-        if len(y_true) >= 5:
-            _, X_test, _, y_test = train_test_split(list(zip(y_true,y_pred)), y_true, test_size=test_size, random_state=42)
-            y_true_t = [t for _,t in zip(X_test, y_true)][:len(X_test)]
-            y_pred_t = [p for _,p in zip(X_test, y_pred)][:len(X_test)]
+            console.print(f"[yellow]Only {len(results)} polymorphs, need ≥5 — using all[/yellow]")
+        if time_split:
+            from matgraph.evals.benchmark import time_split_benchmark
+            m = time_split_benchmark(results, test_size=test_size)
+            if "error" in m:
+                console.print(f"[red]{m['error']}[/red]"); raise typer.Exit(1)
+            mae, rmse, r2, n = m["mae"], m["rmse"], m["r2"], m["n_test"]
+            console.print(f"[green]Time-split MAE: {mae:.4f} RMSE: {rmse:.4f} R2: {r2:.3f} (n={n}) stable_true={m['stable_true']} stable_pred={m['stable_pred']}[/green]")
         else:
-            y_true_t, y_pred_t = y_true, y_pred
-        mae = mean_absolute_error(y_true_t, y_pred_t)
-        rmse = mean_squared_error(y_true_t, y_pred_t, squared=False) if len(y_true_t)>1 else 0.0
-        try:
-            r2 = r2_score(y_true_t, y_pred_t)
-        except Exception:
-            r2 = float("nan")
-        # log to tracking
+            import random
+            from sklearn.model_selection import train_test_split
+            from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+            y_true = [r["true_form_energy"] for r in results if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None]
+            y_pred = [r["predicted_form_energy"] for r in results if r.get("true_form_energy") is not None and r.get("predicted_form_energy") is not None]
+            if len(y_true) < 2:
+                console.print("[red]Not enough true/pred pairs[/red]"); raise typer.Exit(1)
+            if len(y_true) >= 5:
+                _, X_test, _, y_test = train_test_split(list(zip(y_true,y_pred)), y_true, test_size=test_size, random_state=42)
+                y_true_t = [t for _,t in zip(X_test, y_true)][:len(X_test)]
+                y_pred_t = [p for _,p in zip(X_test, y_pred)][:len(X_test)]
+            else:
+                y_true_t, y_pred_t = y_true, y_pred
+            mae = mean_absolute_error(y_true_t, y_pred_t)
+            try:
+                rmse = mean_squared_error(y_true_t, y_pred_t, squared=False)
+            except TypeError:
+                import math
+                rmse = math.sqrt(mean_squared_error(y_true_t, y_pred_t))
+            try:
+                r2 = r2_score(y_true_t, y_pred_t)
+            except Exception:
+                r2 = float("nan")
+            n = len(y_true_t)
+            console.print(f"[green]MAE: {mae:.4f} eV/atom  RMSE: {rmse:.4f}  R2: {r2:.3f}  (n={n})[/green]")
         try:
             from matgraph.tracking import init
-            run = init(project="benchmark", name=f"{formula}-{model}", config={"formula":formula,"model":model,"test_size":test_size,"n":len(y_true_t)})
-            run.log({"mae":mae,"rmse":rmse,"r2":r2,"n_test":len(y_true_t)})
+            run = init(project="benchmark", name=f"{formula}-{model}", config={"formula":formula,"model":model,"test_size":test_size,"time_split":time_split,"n":n})
+            run.log({"mae":mae,"rmse":rmse,"r2":r2,"n_test":n})
             run.finish()
         except Exception:
             pass
-        console.print(f"[green]MAE: {mae:.4f} eV/atom  RMSE: {rmse:.4f}  R2: {r2:.3f}  (n={len(y_true_t)})[/green]")
+    except SystemExit:
+        raise
     except Exception as e:
         console.print(f"[red]Benchmark error: {e}[/red]")
 
 @app.command()
-def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help="Dash-separated elements, e.g. Li-Fe-O"), count: int = typer.Option(10, "--count", "-n", help="Hypothetical structures to generate"), model: str = typer.Option("m3gnet", "--model", "-m")):
-    """Matterverse-lite: generate hypothetical screening (heuristic)."""
+def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help="Dash-separated elements, e.g. Li-Fe-O"), count: int = typer.Option(10, "--count", "-n", help="Hypothetical structures to generate"), model: str = typer.Option("m3gnet", "--model", "-m"), diffusion: bool = typer.Option(False, "--diffusion", help="Use CDVAE/diffusion stub if installed (else heuristic)")):
+    """Matterverse-lite: generate hypothetical screening (heuristic or --diffusion CDVAE stub)."""
     import random
     from matgraph.tracking import init
     api_key = get_api_key()
     if not api_key:
         console.print("[red]MP_API_KEY not set[/red]"); raise typer.Exit(1)
     elems = [e.strip() for e in chemistry.split("-") if e.strip()]
-    console.print(f"[cyan]Generating {count} hypothetical {chemistry} with {model}...[/cyan]")
+    console.print(f"[cyan]Generating {count} hypothetical {chemistry} with {model}{' +diffusion' if diffusion else ''}...[/cyan]")
     try:
-        base_formula = "".join(elems[:2]) if len(elems)>=2 else elems[0]
-        # heuristic: random formulas from elements
-        hypos = []
-        for i in range(count):
-            comp = "".join(f"{e}{random.randint(1,3)}" for e in random.sample(elems, k=min(3,len(elems))))
-            hypos.append(comp)
+        if diffusion:
+            try:
+                from matgraph.discovery import diffusion_generate
+                hypos = diffusion_generate(chemistry, count)
+                console.print(f"[dim]CDVAE diffusion stub: {len(hypos)} candidates[/dim]")
+            except Exception as e:
+                console.print(f"[yellow]Diffusion not available ({e}), falling back to heuristic[/yellow]")
+                diffusion = False
+        if not diffusion:
+            base_formula = "".join(elems[:2]) if len(elems)>=2 else elems[0]
+            hypos = []
+            for i in range(count):
+                comp = "".join(f"{e}{random.randint(1,3)}" for e in random.sample(elems, k=min(3,len(elems))))
+                hypos.append(comp)
         # screen via run_pipeline if exists, else mock
         results=[]
         for h in hypos:

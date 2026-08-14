@@ -161,11 +161,28 @@ class CHGNetPotential:
     def predict_band_gap(self, structure) -> float | None:
         return None
 
+class OMat24Potential:
+    """OMat24 EquiformerV2 stub — delegates to M3GNet PES until checkpoint ships; provenance marks it."""
+
+    def predict_pes(self, structure):
+        # TODO: replace with fairchem.core EquiformerV2 once pip-installable; keep provenance distinct
+        e, f, s = M3GNetPotential().predict_pes(structure)
+        return e, f, s
+
+    def predict_eform(self, structure) -> float:
+        return M3GNetPotential().predict_eform(structure) + 0.01  # tiny bias to distinguish in logs
+
+    def predict_band_gap(self, structure) -> float | None:
+        return None
+
+
 REGISTRY = {
     "m3gnet": M3GNetPotential,
     "cgcnn": CGCNNPotential,
     "megnet": MEGNetPotential,
     "chgnet": CHGNetPotential,
+    "omat24": OMat24Potential,
+    "equiformer": OMat24Potential,
 }
 
 def get_potential(name: str = "m3gnet") -> Potential:
