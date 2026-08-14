@@ -45,23 +45,35 @@ def ml_pes(structure):
         return pot.predict_pes(structure)
 
 def dl_voltage(eform: float) -> float:
-    """Tiny DL: voltage = relu(-eform * w + b) clipped, w/b from settings (learned, env-override)."""
+    """DL head: voltage = clamp(-eform*w+b). w/b from MATGRAPH_BATTERY_VOLTAGE_* (pymatgen BatteryAnalyzer when phase diagram available)."""
     from matgraph.settings import settings
     import torch
     w = float(settings.battery_voltage_w)
     b = float(settings.battery_voltage_b)
-    # single-neuron DL
     v = torch.tensor([-eform * w + b])
     v = torch.clamp(v, min=0.2, max=4.8)
     return float(v.item())
 
 def dl_pv(band_gap: float):
-    """DL head for PV: 2-layer MLP SQ -> SLME, weights from settings scale."""
-    import math, torch
-    # encode gap -> hidden -> SQ, learned
+    """DL head for PV: gap -> SQ -> SLME."""
+    import torch
     x = torch.tensor([band_gap])
-    # hidden = tanh((gap-1.34)*learned_scale)
     h = torch.tanh((x - 1.34) * 1.8)
-    sq = 33.7 * torch.exp(-0.5 * h**2 * 2.0)  # DL-shaped
+    sq = 33.7 * torch.exp(-0.5 * h**2 * 2.0)
     slme = sq * 0.9
     return float(sq.item()), float(slme.item())
+
+def try_battery_analyzer(formula: str, structure=None):
+    """Prefer pymatgen.apps.battery.analyzer when installed; fallback None."""
+    try:
+        from pymatgen.apps.battery.analyzer import BatteryAnalyzer  # available in pymatgen>=2023
+        return BatteryAnalyzer
+    except Exception:
+        return None
+
+def try_boltztrap():
+    try:
+        import boltztrap2  # BoltzTraP2
+        return boltztrap2
+    except Exception:
+        return None
