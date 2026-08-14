@@ -907,6 +907,52 @@ def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help=
         console.print(f"[red]Generate error: {e}[/red]")
 
 @app.command()
+def dataset_version(path: str = typer.Argument(..., help="CSV or CIF dir to version (DVC-like)")):
+    """Version a dataset (like dvc add) — local hash + registry."""
+    from matgraph.data.versioning import version_dataset
+    vid=version_dataset(path, meta={"cli":"version"})
+    console.print(f"[green]Dataset {path} -> {vid}[/green]")
+
+@app.command()
+def dataset_list():
+    """List versioned datasets."""
+    from matgraph.data.versioning import list_datasets
+    from rich.table import Table
+    rows=list_datasets()
+    t=Table(title="Datasets")
+    t.add_column("Version"); t.add_column("Path"); t.add_column("Hash")
+    for r in rows[:20]:
+        t.add_row(r["version"], r["path"], r["hash"])
+    console.print(t)
+
+@app.command()
+def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir with DFT data"), base: str = typer.Option("chgnet", "--base", "-b", help="Base FMM: chgnet|m3gnet|megnet"), epochs: int = typer.Option(5, "--epochs", "-e"), project: str = typer.Option("finetune", "--project", "-p")):
+    """Fine-tune a FMM on your DFT data (active learning)."""
+    from matgraph.training.finetune import finetune as _ft
+    try:
+        res = _ft(data_path=data, base=base, epochs=epochs, project=project)
+        console.print(f"[green]Finetuned {base} on {res['n']} samples → {res['model_id']}[/green]")
+        console.print(f"Metrics: {res['metrics']}")
+        console.print(f"Artifact: {res['artifact']}")
+    except Exception as e:
+        console.print(f"[red]Finetune error: {e}[/red]"); raise typer.Exit(1)
+
+@app.command()
+def model_list():
+    """List available FMMs + registry (like wandb model registry)."""
+    from matgraph.models import available_models
+    from matgraph.training.registry import list_models
+    console.print(f"Available FMMs: {', '.join(available_models())} (add OMat24-EquiformerV2 soon)")
+    regs = list_models()
+    if not regs:
+        console.print("[dim]No finetuned models yet — run matgraph finetune --data ...[/dim]"); return
+    t=Table(title="Model Registry")
+    t.add_column("ID"); t.add_column("Base"); t.add_column("Dataset"); t.add_column("Metrics")
+    for r in regs[:10]:
+        t.add_row(r["id"], r["base"], r["dataset"][:30], str(r["metrics"]))
+    console.print(t)
+
+@app.command()
 def status():
     """Show overall status (like gh status)."""
     from matgraph.cdn import cache_stats
@@ -927,7 +973,12 @@ def status():
         console.print(f"Tracking: {len(runs)} runs")
     except Exception:
         pass
-    console.print(f"Models: {', '.join(available_models())}")
+    console.print(f"Models: {', '.join(available_models())} + OMat24 soon")
+    try:
+        from matgraph.training.registry import list_models as _lm
+        console.print(f"Finetuned: {len(_lm())} in registry")
+    except Exception:
+        pass
     # try wandb
     try:
         import wandb

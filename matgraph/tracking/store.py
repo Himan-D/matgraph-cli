@@ -6,19 +6,32 @@ from typing import Optional, List, Dict, Any
 
 def _dir() -> Path:
     from matgraph.settings import settings
-    # reuse cache_dir/tracking or MATGRAPH_TRACKING_DIR
-    import os
+    import os, tempfile
     p = os.getenv("MATGRAPH_TRACKING_DIR")
     if p:
         return Path(p).expanduser()
-    return settings.cache_dir / "tracking"
+    base = settings.cache_dir / "tracking"
+    try:
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+    except PermissionError:
+        # sandbox fallback
+        fb = Path(tempfile.gettempdir()) / "matgraph_tracking"
+        fb.mkdir(parents=True, exist_ok=True)
+        return fb
 
 def _db() -> Path:
     return _dir() / "runs.db"
 
 def _init():
     d = _dir()
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        import tempfile
+        from pathlib import Path
+        d = Path(tempfile.gettempdir()) / "matgraph_tracking"
+        d.mkdir(parents=True, exist_ok=True)
     db = _db()
     conn = sqlite3.connect(str(db))
     conn.execute("PRAGMA journal_mode=WAL")

@@ -14,9 +14,21 @@ class Run:
         self._step = 0
         global _CURRENT
         _CURRENT = self
-        # auto wandb sync if available
+        # auto wandb sync — offline if no key, online if user set WANDB_API_KEY
         self._wb = None
         try:
+            import os
+            from matgraph.config import get_wandb_key, get_config_value
+            key = get_wandb_key()
+            base = get_config_value("wandb_base_url")
+            if base:
+                os.environ["WANDB_BASE_URL"] = base
+            if key:
+                os.environ["WANDB_API_KEY"] = key
+                os.environ.pop("WANDB_MODE", None)
+            else:
+                os.environ.setdefault("WANDB_MODE", "offline")
+                os.environ.setdefault("WANDB_DISABLE_CODE", "true")
             import wandb
             self._wb = wandb.init(project=project, name=name, config=self.config, reinit=True)
         except Exception:
@@ -48,16 +60,36 @@ class Run:
 
     def log_table(self, name: str, columns: list, data: list):
         # wandb.Table compatible — store as json artifact + log
-        import json, tempfile, pathlib
+        import json, pathlib
         tbl = {"columns": columns, "data": data}
         p = pathlib.Path(f"/tmp/matgraph_table_{self.id}_{name}.json")
         p.write_text(json.dumps(tbl))
         self.log_artifact(str(p), type="table")
         self.log({f"table/{name}": len(data)})
+        # also try wandb.Table
+        if self._wb:
+            try:
+                import wandb
+                wt = wandb.Table(columns=columns, data=data)
+                self._wb.log({f"table/{name}": wt})
+            except Exception:
+                pass
 
     def log_image(self, name: str, path: str):
         self.log_artifact(path, type="image")
         self.log({f"image/{name}": path})
+        if self._wb:
+            try:
+                import wandb
+                self._wb.log({f"image/{name}": wandb.Image(path)})
+            except Exception:
+                pass
+
+    # wandb-compatible: wandb.Table / wandb.Artifact / wandb.Image passthrough
+    def __getattr__(self, name):
+        if self._wb and hasattr(self._wb, name):
+            return getattr(self._wb, name)
+        raise AttributeError(name)
 
     def finish(self):
         finish_run(self.id)
