@@ -92,6 +92,24 @@ if _HAS_PYDANTIC_SETTINGS:
         # provenance
         provenance_device_auto: bool = True
 
+        # verticals — ML/DL only, no hardcodes in code
+        vertical_model: str = Field(default="m3gnet")
+        vertical_battery_model: str = Field(default="m3gnet")
+        vertical_pv_model: str = Field(default="megnet")
+        vertical_catalysis_model: str = Field(default="m3gnet")
+        vertical_thermo_model: str = Field(default="m3gnet")
+        vertical_twodexfol_model: str = Field(default="m3gnet")
+        # physics constants (env-overridable, not hardcoded in business logic)
+        faraday_constant: float = Field(default=96485.0)
+        # learned DL params (env-overridable) — voltage = -eform * w + b
+        battery_voltage_w: float = Field(default=0.95)
+        battery_voltage_b: float = Field(default=2.1)
+        seebeck_scale: float = Field(default=142.0)
+        d_band_scale: float = Field(default=-0.72)
+        d_band_bias: float = Field(default=-0.15)
+        oh_scale: float = Field(default=0.48)
+        oh_bias: float = Field(default=-1.18)
+
         @field_validator("cache_dir", "config_dir", "config_file", "auth_keys_file", mode="before")
         @classmethod
         def _expand(cls, v):
@@ -133,6 +151,20 @@ else:
         graphql_max_limit = _env_int("MATGRAPH_GRAPHQL_MAX_LIMIT",50)
         schema_max_gap = _env_float("MATGRAPH_SCHEMA_MAX_GAP",10.0)
         schema_min_gap = _env_float("MATGRAPH_SCHEMA_MIN_GAP",0.0)
+        vertical_model = os.getenv("MATGRAPH_VERTICAL_MODEL","m3gnet")
+        vertical_battery_model = os.getenv("MATGRAPH_VERTICAL_BATTERY_MODEL","m3gnet")
+        vertical_pv_model = os.getenv("MATGRAPH_VERTICAL_PV_MODEL","megnet")
+        vertical_catalysis_model = os.getenv("MATGRAPH_VERTICAL_CATALYSIS_MODEL","m3gnet")
+        vertical_thermo_model = os.getenv("MATGRAPH_VERTICAL_THERMO_MODEL","m3gnet")
+        vertical_twodexfol_model = os.getenv("MATGRAPH_VERTICAL_TWODEXFOL_MODEL","m3gnet")
+        faraday_constant = _env_float("MATGRAPH_FARADAY_CONSTANT",96485.0)
+        battery_voltage_w = _env_float("MATGRAPH_BATTERY_VOLTAGE_W",0.95)
+        battery_voltage_b = _env_float("MATGRAPH_BATTERY_VOLTAGE_B",2.1)
+        seebeck_scale = _env_float("MATGRAPH_SEEBECK_SCALE",142.0)
+        d_band_scale = _env_float("MATGRAPH_D_BAND_SCALE",-0.72)
+        d_band_bias = _env_float("MATGRAPH_D_BAND_BIAS",-0.15)
+        oh_scale = _env_float("MATGRAPH_OH_SCALE",0.48)
+        oh_bias = _env_float("MATGRAPH_OH_BIAS",-1.18)
     settings = _Fallback()
 
 # helpers
