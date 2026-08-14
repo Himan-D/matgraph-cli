@@ -1,6 +1,6 @@
 [project]
 name = "matgraph-cli"
-version = "2.9.2"
+version = "2.10.0"
 description = "Complete computational materials science toolkit: ML predictions, DFT bridge, stability, band structure, elastic, dielectric, magnetic, and genetic algorithm discovery"
 readme = "README.md"
 requires-python = ">=3.9"

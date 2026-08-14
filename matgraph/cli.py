@@ -986,6 +986,56 @@ def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir 
         console.print(f"[red]Finetune error: {e}[/red]"); raise typer.Exit(1)
 
 @app.command()
+def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), domain: str = typer.Option("all", "--domain", "-d", help="battery|catalysis|pv|thermo|2d|alloy|defect|all")):
+    """Research verticals: battery, catalysis, PV, thermo, 2D, alloys, defects — honest proxies with refs."""
+    from pymatgen.core import Composition
+    api_key = get_api_key()
+    # try fetch MP truth for gap/formation_energy/density/structure
+    bg, fe, dens, struct = None, None, None, None
+    if api_key:
+        try:
+            from matgraph.client import fetch_materials_data
+            docs = fetch_materials_data(formula, api_key)
+            if docs:
+                bg = docs[0].band_gap
+                fe = docs[0].formation_energy_per_atom
+                struct = docs[0].structure
+                dens = struct.density if struct else None
+        except Exception:
+            pass
+    domains = [domain] if domain!="all" else ["battery","catalysis","pv","thermo","2d","alloy","defect"]
+    for dom in domains:
+        if dom=="battery":
+            from matgraph.verticals.battery import battery_metrics
+            m=battery_metrics(formula, structure=struct, formation_energy_per_atom=fe)
+            console.print(f"[bold]Battery[/bold] cap={m['theoretical_capacity_mah_g']} mAh/g voltage~{m['avg_voltage_V_proxy']} V [{m['method']}]")
+            console.print(f"[dim]{m['reference']}[/dim]")
+        elif dom=="catalysis":
+            from matgraph.verticals.catalysis import catalysis_metrics
+            m=catalysis_metrics(formula, structure=struct)
+            console.print(f"[bold]Catalysis[/bold] d-center={m['d_band_center_eV_proxy']} eV OH*={m['adsorption_OH_eV_proxy']} eV [{m['method']}]")
+        elif dom=="pv":
+            from matgraph.verticals.photovoltaics import pv_metrics
+            m=pv_metrics(formula, band_gap=bg)
+            console.print(f"[bold]PV[/bold] gap={bg} eV SQ={m['sq_limit_percent_proxy']}% SLME={m['slme_percent_proxy']}% [{m['method']}]")
+        elif dom=="thermo":
+            from matgraph.verticals.thermoelectrics import thermo_metrics
+            m=thermo_metrics(formula, band_gap=bg, density=dens)
+            console.print(f"[bold]Thermo[/bold] Seebeck={m['seebeck_uV_K_proxy']} uV/K ZT~{m['zt_proxy']} [{m['method']}]")
+        elif dom=="2d":
+            from matgraph.verticals.twod import twod_metrics
+            m=twod_metrics(formula, structure=struct)
+            console.print(f"[bold]2D[/bold] exfol={m['exfoliation_meV_per_atom_proxy']} meV/atom {m['threshold']} [{m['method']}]")
+        elif dom=="alloy":
+            from matgraph.verticals.alloys import alloy_metrics
+            m=alloy_metrics(formula)
+            console.print(f"[bold]Alloy[/bold] n={m['n_elements']} H_mix={m['h_mix_kJ_mol_proxy']} S={m['s_config_J_mol_K']} HEA={m['hea_likely']} [{m['method']}]")
+        elif dom=="defect":
+            from matgraph.verticals.defects import defect_metrics
+            m=defect_metrics(formula, formation_energy_per_atom=fe)
+            console.print(f"[bold]Defect[/bold] E_vac={m['vacancy_formation_eV_proxy']} eV [{m['method']}]")
+
+@app.command()
 def model_list():
     """List available FMMs + registry (like wandb model registry)."""
     from matgraph.models import available_models
