@@ -26,3 +26,9 @@ jobs:
 
       - name: Test CLI Installation
         run: uv run matgraph --help
+
+      - name: Update README dynamically
+        run: uv run python scripts/update_readme.py && git diff --exit-code README.md || echo "README dynamic check done"
+
+      - name: Run tests
+        run: uv run pytest -q

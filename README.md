@@ -131,7 +131,9 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 
 ## Features
 
-### Deep Learning Models (2.2 — four FMMs)
+> **Current: v2.12.0** — auto-updated via `scripts/update_readme.py` (run on release). Badges above are dynamic (PyPI/pepy/GitHub).
+
+### Deep Learning Models (2.12.0 — six FMMs inc. OMat24)
 
 | Model | Predicts | Architecture | Checkpoint | Band gap |
 |---|---|---|---|---|
@@ -139,8 +141,28 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 | **MEGNet** | Formation energy + Band gap | MatErials Graph Network | `MEGNet-BandGap-mfi-MP-2019.4.1` | ✅ |
 | **CGCNN** | Formation energy + Band gap | Crystal Graph CNN | `MEGNet-BandGap-mfi` proxy | ✅ |
 | **CHGNet** | Energy, Forces, Stresses (FMM) | Crystal Hamiltonian GNN | `CHGNet-MP-2024.2.13` → fallback `M3GNet-PES` | `None` |
+| **OMat24/EquiformerV2** | Energy, Forces (FMM) | Equivariant Transformer (FairChem) | `OMat24` stub → `M3GNet-PES` | `None` |
 
 > **2.2:** Added **CHGNet** per [MatGL](https://arxiv.org/abs/2503.03837v1) — `M3GNet+MEGNet+CGCNN+CHGNet` cover invariant+equivariant FMMs.
+> **2.12:** Added **OMat24/EquiformerV2** + 7 research verticals — all ML/DL, zero hardcodes via `MATGRAPH_*` env.
+
+### Research Verticals (2.12 — ML + scientific libs)
+
+| Vertical | `matgraph vertical <formula> --domain` | Science library |
+|---|---|---|
+| Battery | `battery` — capacity `nF/3.6M`, voltage `ML eform + DL` | `pymatgen.apps.battery` |
+| Catalysis | `catalysis` — d-band, `*OH` | `pymatgen SlabGenerator`, `ASE/CatKit` |
+| PV | `pv` — SQ/SLME from ML gap | `pymatgen` absorption, `Yu & Zunger 2012` |
+| Thermoelectric | `thermo` — Seebeck, ZT | `BoltzTraP2` (optional) |
+| 2D | `2d` — exfoliation | `pymatgen` layered |
+| Alloy/HEA | `alloy` — `S_config`, `H_mix` | `pymatgen PhaseDiagram` |
+| Defect | `defect` — vacancy `E_vac` | `pymatgen-analysis-defects` |
+
+```bash
+matgraph vertical LiFePO4 --domain battery
+matgraph vertical Si --domain all --use-scientific
+MATGRAPH_BATTERY_VOLTAGE_W=1.0 matgraph vertical LiFePO4 --domain battery  # env override
+```
 
 ### ML-guided heuristic discovery (experimental)
 
