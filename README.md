@@ -131,9 +131,9 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 
 ## Features
 
-> **Current: v2.14.0** — auto-updated via `scripts/update_readme.py` (run on release). Badges above are dynamic (PyPI/pepy/GitHub).
+> **Current: v2.15.0** — auto-updated via `scripts/update_readme.py` (run on release). Badges above are dynamic (PyPI/pepy/GitHub).
 
-### Deep Learning Models (2.14.0 — six FMMs inc. OMat24)
+### Deep Learning Models (2.15.0 — six FMMs inc. OMat24)
 
 | Model | Predicts | Architecture | Checkpoint | Band gap |
 |---|---|---|---|---|

@@ -1,0 +1,6 @@
+2026-08-16 00:33:57,010 INFO    MainThread:3875 [wandb_init.py:setup_run_log_directory():739] Logging user logs to /Users/himand/matgraph-cli/.muse/worktrees/subagent-v2-91e0815d-8292-4adf-8998-5ddeb5b6e8fb-01a006cd-d51e-7322-b4fa-b83e52cd5667/wandb/offline-run-20260816_003357-0r4ydu48/logs/debug.log
+2026-08-16 00:33:57,011 INFO    MainThread:3875 [wandb_init.py:setup_run_log_directory():740] Logging internal logs to /Users/himand/matgraph-cli/.muse/worktrees/subagent-v2-91e0815d-8292-4adf-8998-5ddeb5b6e8fb-01a006cd-d51e-7322-b4fa-b83e52cd5667/wandb/offline-run-20260816_003357-0r4ydu48/logs/debug-internal.log
+2026-08-16 00:33:57,011 INFO    MainThread:3875 [wandb_init.py:init():783] calling init triggers
+2026-08-16 00:33:57,011 INFO    MainThread:3875 [wandb_init.py:init():788] wandb.init called with sweep_config: {}
+config: {'_wandb': {}}
+2026-08-16 00:33:57,011 INFO    MainThread:3875 [wandb_init.py:init():831] starting backend
