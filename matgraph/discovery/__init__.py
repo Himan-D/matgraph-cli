@@ -2,46 +2,47 @@ from matgraph.core import substitute_material
 from matgraph.ga import CrystalGA
 
 def diffusion_generate(chemistry: str, count: int) -> list[str]:
-    """Real diffusion: tries MatterGen > DiffCSP > CDVAE, else heuristic. Select via MATGRAPH_DIFFUSION_MODEL."""
+    """Real diffusion only — no silent heuristic fallback. Requires mattergen/diffcsp/cdvae checkpoint."""
     import os
     from matgraph.settings import settings
+    from matgraph.exceptions import ModelInferenceError
     model = os.getenv("MATGRAPH_DIFFUSION_MODEL", getattr(settings, "diffusion_model", "auto")).lower()
-    # Try real generators in order
-    if model in ("auto","mattergen","matter-gen"):
+    # Explicit model request must exist
+    if model in ("mattergen","matter-gen"):
         try:
-            # mattergen: pip install mattergen (Azure) — API is mattergen.generator
             import mattergen  # type: ignore
-            # mattergen generates pymatgen Structures; convert to formulas
             gen = getattr(mattergen, "generate", None) or getattr(mattergen, "MatterGen", None)
-            if gen:
-                # placeholder call — real needs checkpoint: mattergen.generate(chemistry, n=count)
-                pass
+            if gen is None:
+                raise ImportError("mattergen.generate not found")
+            raise ModelInferenceError("MatterGen checkpoint/runtime not configured — set mattergen checkpoint and MATGRAPH_DIFFUSION_MODEL=mattergen; see docs/models.md")
+        except ModelInferenceError:
+            raise
         except Exception as e:
-            if model == "mattergen":
-                raise RuntimeError(f"MATGRAPH_DIFFUSION_MODEL=mattergen requested but mattergen not installed: {e} — pip install matgraph-cli[diffusion]")
-    if model in ("auto","diffcsp","diff-csp"):
+            raise ModelInferenceError(f"MatterGen not installed: {e} — pip install matgraph-cli[diffusion]") from e
+    if model in ("diffcsp","diff-csp"):
         try:
             import diffcsp  # type: ignore
-            # diffcsp.sampling — real call diffcsp.generate(...)
-            if hasattr(diffcsp, "DiffCSP"):
-                pass
-        except Exception:
-            if model == "diffcsp":
-                raise RuntimeError("MATGRAPH_DIFFUSION_MODEL=diffcsp requested but diffcsp not installed — pip install matgraph-cli[diffusion]")
-    if model in ("auto","cdvae"):
+            if not hasattr(diffcsp, "DiffCSP"):
+                raise ImportError("diffcsp.DiffCSP not found")
+            raise ModelInferenceError("DiffCSP checkpoint not configured — MATGRAPH_DIFFUSION_MODEL=diffcsp requires checkpoint; see docs/models.md")
+        except ModelInferenceError:
+            raise
+        except Exception as e:
+            raise ModelInferenceError(f"DiffCSP not installed: {e} — pip install matgraph-cli[diffusion]") from e
+    if model == "cdvae":
         try:
             import cdvae  # type: ignore
-            if hasattr(cdvae, "CDVAE"):
-                pass
-        except Exception:
-            if model == "cdvae":
-                raise RuntimeError("MATGRAPH_DIFFUSION_MODEL=cdvae requested but cdvae not installed — pip install matgraph-cli[diffusion]")
-    # Fallback heuristic — lattice sampling with provenance distinct from real
-    import random
-    elems = [e.strip() for e in chemistry.split("-") if e.strip()]
-    out = []
-    for _ in range(count):
-        out.append("".join(f"{e}{random.randint(1,3)}" for e in random.sample(elems, k=min(3, len(elems)))))
-    return out
+            if not hasattr(cdvae, "CDVAE"):
+                raise ImportError("cdvae.CDVAE not found")
+            raise ModelInferenceError("CDVAE checkpoint not configured — MATGRAPH_DIFFUSION_MODEL=cdvae requires checkpoint")
+        except ModelInferenceError:
+            raise
+        except Exception as e:
+            raise ModelInferenceError(f"CDVAE not installed: {e} — pip install matgraph-cli[diffusion]") from e
+    # auto: fail loudly — never return random chemistry
+    raise ModelInferenceError(
+        f"Real diffusion unavailable (MATGRAPH_DIFFUSION_MODEL={model}). Install one of: pip install matgraph-cli[diffusion] + mattergen/diffcsp/cdvae checkpoint. "
+        "Refusing to return heuristic random formulas — see audit fix."
+    )
 
 __all__ = ["substitute_material","CrystalGA","diffusion_generate"]

@@ -903,8 +903,8 @@ def benchmark(formula: str = typer.Option("Si", "--formula", "-f", help="Formula
         console.print(f"[red]Benchmark error: {e}[/red]")
 
 @app.command()
-def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help="Dash-separated elements, e.g. Li-Fe-O"), count: int = typer.Option(10, "--count", "-n", help="Hypothetical structures to generate"), model: str = typer.Option("m3gnet", "--model", "-m"), diffusion: bool = typer.Option(False, "--diffusion", help="Use CDVAE/diffusion stub if installed (else heuristic)")):
-    """Matterverse-lite: generate hypothetical screening (heuristic or --diffusion CDVAE stub)."""
+def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help="Dash-separated elements, e.g. Li-Fe-O"), count: int = typer.Option(10, "--count", "-n", help="Hypothetical structures to generate"), model: str = typer.Option("m3gnet", "--model", "-m"), diffusion: bool = typer.Option(False, "--diffusion", help="Use real diffusion (MatterGen/DiffCSP/CDVAE) — fails if not installed, no heuristic fallback")):
+    """Matterverse-lite: generate screening. With --diffusion, requires real checkpoint (fails honestly)."""
     import random
     from matgraph.tracking import init
     api_key = get_api_key()
@@ -914,14 +914,10 @@ def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help=
     console.print(f"[cyan]Generating {count} hypothetical {chemistry} with {model}{' +diffusion' if diffusion else ''}...[/cyan]")
     try:
         if diffusion:
-            try:
-                from matgraph.discovery import diffusion_generate
-                hypos = diffusion_generate(chemistry, count)
-                console.print(f"[dim]CDVAE diffusion stub: {len(hypos)} candidates[/dim]")
-            except Exception as e:
-                console.print(f"[yellow]Diffusion not available ({e}), falling back to heuristic[/yellow]")
-                diffusion = False
-        if not diffusion:
+            from matgraph.discovery import diffusion_generate
+            hypos = diffusion_generate(chemistry, count)
+            console.print(f"[dim]Real diffusion: {len(hypos)} candidates[/dim]")
+        else:
             base_formula = "".join(elems[:2]) if len(elems)>=2 else elems[0]
             hypos = []
             for i in range(count):
@@ -975,7 +971,7 @@ def dataset_list():
 
 @app.command()
 def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir with DFT data"), base: str = typer.Option("chgnet", "--base", "-b", help="Base FMM: chgnet|m3gnet|megnet"), epochs: int = typer.Option(5, "--epochs", "-e"), project: str = typer.Option("finetune", "--project", "-p")):
-    """Fine-tune a FMM on your DFT data (active learning)."""
+    """Fine-tune FMM — real training when deps present, else honest error. Demo: finetune --simulate."""
     from matgraph.training.finetune import finetune as _ft
     try:
         res = _ft(data_path=data, base=base, epochs=epochs, project=project)
@@ -983,7 +979,15 @@ def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir 
         console.print(f"Metrics: {res['metrics']}")
         console.print(f"Artifact: {res['artifact']}")
     except Exception as e:
-        console.print(f"[red]Finetune error: {e}[/red]"); raise typer.Exit(1)
+        console.print(f"[red]Finetune error (real training required — use --simulate for demo): {e}[/red]"); raise typer.Exit(1)
+
+@app.command()
+def finetune_simulate(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir"), base: str = typer.Option("chgnet", "--base", "-b"), epochs: int = typer.Option(5, "--epochs", "-e"), project: str = typer.Option("finetune", "--project", "-p")):
+    """Simulated finetune (demo only) — writes fake metrics, not real training."""
+    from matgraph.training.finetune import simulate_finetune as _sf
+    res = _sf(data_path=data, base=base, epochs=epochs, project=project)
+    console.print(f"[yellow]Simulated {base} on {res['n']} samples → {res['model_id']} (NOT real training)[/yellow]")
+    console.print(f"Metrics: {res['metrics']}")
 
 @app.command()
 def al_loop(formula: str = typer.Argument(..., help="Formula for active learning"), model: str = typer.Option("m3gnet", "--model", "-m")):

@@ -50,43 +50,34 @@ class M3GNetPotential:
 
 
 class CGCNNPotential:
-    """Real CGCNN via matgl MEGNet-bandgap — real checkpoint at materialyze/MEGNet-BandGap-mfi-MP-2019.4.1"""
-    @staticmethod
-    @lru_cache(maxsize=1)
-    def _model():
-        import matgl
-        # Correct HF repo is materialyze/MEGNet-BandGap-mfi-MP-2019.4.1 (already cached at ~/.cache/matgl)
-        try:
-            return matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
-        except Exception:
-            try:
-                return matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
-            except Exception:
-                return matgl.load_model("M3GNet-Eform-MP-2019.4.1")
-
+    """CGCNN — honest: requires DGL + txie-93/cgcnn checkpoint; no MEGNet proxy."""
     def predict_pes(self, structure):
-        # CGCNN has no PES head — delegate to M3GNet PES for forces, but mark provenance
-        return M3GNetPotential().predict_pes(structure)
+        from matgraph.exceptions import ModelInferenceError
+        raise ModelInferenceError("CGCNN PES not available — CGCNN has no PES head and no M3GNet fallback is allowed. Install CGCNN via DGL + txie-93/cgcnn and implement CGCNNPotential.predict_pes, or use --model m3gnet/chgnet.")
 
     def predict_eform(self, structure) -> float:
-        # Use MEGNet eform head as CGCNN proxy with separate checkpoint
+        from matgraph.exceptions import ModelInferenceError
+        # Do not proxy MEGNet — fail honestly per audit
         try:
-            m = self._model()
-            return float(m.predict_structure(structure).detach().item())
-        except Exception:
-            return M3GNetPotential().predict_eform(structure)
+            import dgl  # type: ignore
+            import cgcnn  # type: ignore
+            # Real path: cgcnn.model.CGCNN.load("txie-93/cgcnn")
+            raise ModelInferenceError("CGCNN checkpoint txie-93/cgcnn not wired — implement DGL CGCNN loading here")
+        except ModelInferenceError:
+            raise
+        except Exception as e:
+            raise ModelInferenceError(f"CGCNN not installed — pip install dgl + cgcnn checkpoint: {e}") from e
 
     def predict_band_gap(self, structure) -> float | None:
+        from matgraph.exceptions import ModelInferenceError
         try:
-            import matgl
-            m = matgl.load_model("MEGNet-BandGap-mfi-MP-2019.4.1")
-            return float(m.predict_structure(structure).detach().item())
-        except Exception:
-            try:
-                m = matgl.load_model("MEGNet-MP-2019.4.1-BandGap-mfi")
-                return float(m.predict_structure(structure).detach().item())
-            except Exception:
-                return None
+            import dgl  # type: ignore
+            import cgcnn  # type: ignore
+            raise ModelInferenceError("CGCNN band_gap checkpoint not wired")
+        except ModelInferenceError:
+            raise
+        except Exception as e:
+            raise ModelInferenceError(f"CGCNN not installed: {e}") from e
 
 
 class MEGNetPotential:
@@ -162,45 +153,28 @@ class CHGNetPotential:
         return None
 
 class OMat24Potential:
-    """OMat24 EquiformerV2 — real via fairchem-core when installed, else M3GNet fallback with provenance."""
+    """OMat24 EquiformerV2 — requires fairchem-core + checkpoint; no M3GNet fallback."""
 
     @staticmethod
     @lru_cache(maxsize=1)
     def _fairchem():
         try:
             from fairchem.core.models.equiformer_v2 import EquiformerV2  # type: ignore
-            # real checkpoint: OMat24 — requires fairchem-core + weights from huggingface
-            # e.g. EquiformerV2.from_pretrained("facebook/OMat24-EquiformerV2")
             return EquiformerV2
         except Exception:
             return None
 
     def predict_pes(self, structure):
-        # Try fairchem EquiformerV2 first
+        from matgraph.exceptions import ModelInferenceError
         Fc = self._fairchem()
-        if Fc is not None:
-            try:
-                # Real path: atoms -> EquiformerV2 -> energy/forces/stress
-                # Fallback to M3GNet if weights not cached — keep no hardcode
-                from pymatgen.io.ase import AseAtomsAdaptor
-                atoms = AseAtomsAdaptor.get_atoms(structure)
-                # model = Fc.from_pretrained("facebook/OMat24") — lazy
-                # return model.predict(atoms)  # placeholder for real inference
-                pass
-            except Exception:
-                pass
-        e, f, s = M3GNetPotential().predict_pes(structure)
-        return e, f, s
+        if Fc is None:
+            raise ModelInferenceError("OMat24 not installed — pip install matgraph-cli[omat24] (fairchem-core) + OMat24 checkpoint. Refusing M3GNet fallback per audit.")
+        # Real inference must load checkpoint: Fc.from_pretrained("facebook/OMat24-EquiformerV2")
+        raise ModelInferenceError("OMat24 checkpoint/runtime not configured — set MATGRAPH_OMAT24_CHECKPOINT and wire EquiformerV2.from_pretrained")
 
     def predict_eform(self, structure) -> float:
-        Fc = self._fairchem()
-        if Fc is not None:
-            try:
-                # real eform from OMat24 PES: E_form = (E_total - sum mu)/N
-                pass
-            except Exception:
-                pass
-        return M3GNetPotential().predict_eform(structure) + 0.01
+        from matgraph.exceptions import ModelInferenceError
+        raise ModelInferenceError("OMat24 eform not available via M3GNet fallback — fix per audit. Use --model m3gnet/megnet/chgnet.")
 
     def predict_band_gap(self, structure) -> float | None:
         return None
