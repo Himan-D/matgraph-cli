@@ -92,6 +92,9 @@ if _HAS_PYDANTIC_SETTINGS:
         # provenance
         provenance_device_auto: bool = True
 
+        # diffusion / generative
+        diffusion_model: str = Field(default="auto")
+
         # verticals — ML/DL only, no hardcodes in code
         vertical_model: str = Field(default="m3gnet")
         vertical_battery_model: str = Field(default="m3gnet")
@@ -153,6 +156,7 @@ else:
         graphql_max_limit = _env_int("MATGRAPH_GRAPHQL_MAX_LIMIT",50)
         schema_max_gap = _env_float("MATGRAPH_SCHEMA_MAX_GAP",10.0)
         schema_min_gap = _env_float("MATGRAPH_SCHEMA_MIN_GAP",0.0)
+        diffusion_model = os.getenv("MATGRAPH_DIFFUSION_MODEL","auto")
         vertical_model = os.getenv("MATGRAPH_VERTICAL_MODEL","m3gnet")
         vertical_battery_model = os.getenv("MATGRAPH_VERTICAL_BATTERY_MODEL","m3gnet")
         vertical_pv_model = os.getenv("MATGRAPH_VERTICAL_PV_MODEL","megnet")

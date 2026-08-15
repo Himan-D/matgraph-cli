@@ -396,6 +396,17 @@ def export_dft(formula: str, api_key: str, code: str = "vasp", output_dir: str =
     else:
         raise ValidationError(f"Unsupported DFT code: {code}. Use 'vasp' or 'qe'.")
 
+def active_learning_loop(formula: str, api_key: str, model: str = "m3gnet", hull_tol: float = 0.05) -> dict:
+    """Real active learning: predict → hull check → DFT input ready → feedback via finetune."""
+    preds = run_pipeline(formula, api_key, model=model)
+    hull = stability_hull(formula, api_key)
+    # pick most stable ML prediction
+    best = min(preds, key=lambda r: r.get("predicted_form_energy", 1e9)) if preds else None
+    hull_best = min(hull, key=lambda h: h["energy_above_hull"]) if hull else None
+    # DFT input dir ready for VASP/QE submit
+    dft = export_dft(formula, api_key, code="vasp", output_dir=f"dft_inputs/{formula}_AL")
+    return {"predictions": preds, "hull": hull, "best_ml": best, "best_hull": hull_best, "dft": dft, "next": "run VASP/QE in dft_inputs, then matgraph finetune --data <out> to close loop", "provenance": _provenance()}
+
 def stability_hull(formula: str, api_key: str) -> List[dict]:
     from mp_api.client import MPRester
     with MPRester(api_key) as mpr:

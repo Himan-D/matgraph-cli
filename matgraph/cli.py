@@ -986,6 +986,17 @@ def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir 
         console.print(f"[red]Finetune error: {e}[/red]"); raise typer.Exit(1)
 
 @app.command()
+def al_loop(formula: str = typer.Argument(..., help="Formula for active learning"), model: str = typer.Option("m3gnet", "--model", "-m")):
+    """Real active learning loop: ML predict → hull → DFT inputs → finetune (no shit)."""
+    api_key = get_api_key()
+    if not api_key:
+        console.print("[red]MP_API_KEY not set[/red]"); raise typer.Exit(1)
+    from matgraph.core import active_learning_loop
+    res = active_learning_loop(formula, api_key, model=model)
+    console.print(f"[green]Hull best: {res['best_hull']}[/green]")
+    console.print(f"[dim]DFT inputs: {res['dft']['directory']} → {res['next']}[/dim]")
+
+@app.command()
 def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), domain: str = typer.Option("all", "--domain", "-d", help="battery|catalysis|pv|thermo|2d|alloy|defect|all"), use_scientific: bool = typer.Option(True, "--use-scientific/--no-scientific", help="Use pymatgen/BoltzTraP2 when installed")):
     """Research verticals: battery, catalysis, PV, thermo, 2D, alloys, defects — ML + scientific libs."""
     from pymatgen.core import Composition
