@@ -1,10 +1,31 @@
 [project]
 name = "matgraph-cli"
-version = "2.12.0"
+version = "2.12.1"
 description = "Complete computational materials science toolkit: ML predictions, DFT bridge, stability, band structure, elastic, dielectric, magnetic, and genetic algorithm discovery"
-readme = "README.md"
+readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.9"
+license = {text = "MIT"}
+keywords = ["materials-science", "materials-informatics", "machine-learning", "deep-learning", "m3gnet", "megnet", "chgnet", "omat24", "pymatgen", "dft", "battery", "catalysis", "photovoltaics", "thermoelectrics", "graphql", "cli", "agent-tool"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Environment :: Console",
+    "Natural Language :: English",
+]
 authors = [
+    {name = "Himan", email = "himan@trinetralabs.ai"}
+]
+maintainers = [
     {name = "Himan", email = "himan@trinetralabs.ai"}
 ]
 dependencies = [

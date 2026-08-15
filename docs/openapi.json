@@ -1,0 +1,32 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "MatGraph — Materials ML API",
+    "description": "REST + GraphQL for materials predictions. Auth: x-api-key: mg_*. Tools: POST /v1/predict, POST /graphql, GET /health. CLI/SDK same models (M3GNet/MEGNet/CGCNN/CHGNet/OMat24) + verticals (battery/catalysis/pv/thermo/2d/alloy/defect). See llms.txt for agent guide.",
+    "version": "2.12.1",
+    "contact": {"name": "Himan", "email": "himan@trinetralabs.ai", "url": "https://github.com/Himan-D/matgraph-cli"},
+    "license": {"name": "MIT", "url": "https://github.com/Himan-D/matgraph-cli/blob/main/LICENSE"}
+  },
+  "servers": [{"url": "http://localhost:8000", "description": "Local uvicorn matgraph.graphql_app:app"}],
+  "paths": {
+    "/v1/predict": {
+      "post": {
+        "summary": "Predict material properties",
+        "security": [{"ApiKeyAuth": []}],
+        "requestBody": {"content": {"application/json": {"schema": {"type": "object", "properties": {"formula": {"type": "string", "example": "LiFePO4"}, "model": {"type": "string", "enum": ["m3gnet","megnet","cgcnn","chgnet","omat24"], "default": "m3gnet"}, "limit": {"type": "integer"}, "min_gap": {"type": "number"}, "max_gap": {"type": "number"}}, "required": ["formula"]}}}},
+        "responses": {"200": {"description": "predictions with provenance"}}
+      }
+    },
+    "/graphql": {
+      "post": {
+        "summary": "GraphQL predictMaterial(formula, model, limit, min_gap, max_gap)",
+        "security": [{"ApiKeyAuth": []}],
+        "responses": {"200": {"description": "GraphQL"}}
+      }
+    },
+    "/health": {"get": {"summary": "Health check", "responses": {"200": {"description": "ok"}}}}
+  },
+  "components": {
+    "securitySchemes": {"ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "x-api-key"}}
+  }
+}

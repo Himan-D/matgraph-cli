@@ -1,0 +1,42 @@
+# MatGraph — llms.txt for AI agents
+> Deep Learning toolkit for materials science. ML predictions via M3GNet/MEGNet/CHGNet/OMat24 + pymatgen. CLI/SDK/GraphQL.
+
+## Install
+- `pip install matgraph-cli` (or `uv tool install matgraph-cli`) — requires `MP_API_KEY` from materialsproject.org
+- `matgraph --help` lists all tools
+
+## Agent Tools (prefer these)
+- `matgraph predict <formula> --model m3gnet|megnet|cgcnn|chgnet|omat24 --uq --viz` — formation energy (+ FORCES/STRESSES if m3gnet/chgnet), band gap if megnet/cgcnn. Returns provenance + uncertainty.
+- `matgraph substitute LiFePO4 Li Na` — heuristic stability via ML PES
+- `matgraph xrd|stability|bands|elastic|dielectric|magnetic|phonon <formula>` — MP-grounded properties
+- `matgraph vertical <formula> --domain battery|catalysis|pv|thermo|2d|alloy|defect|all` — ML + pymatgen/BoltzTraP2 verticals, all via `MATGRAPH_*` env, zero hardcodes
+- `matgraph finetune --data DFT.csv --base chgnet --epochs 5` — active-learning on own DFT data, logs to wandb-like local tracking + model registry
+- `matgraph benchmark --formula Si --model m3gnet --time-split` — time-split MAE/RMSE/R2
+- `matgraph generate --chemistry Li-Fe-O --count 10 --diffusion` — hypothetical screening
+- `matgraph relax|dft|evolve|design` — structure work
+
+## SDK
+```python
+from matgraph import MatGraphSDK
+sdk = MatGraphSDK()  # reads MP_API_KEY
+sdk.predict("LiFePO4", model="m3gnet")
+sdk.vertical("LiFePO4", domain="battery")  # or catalysis/pv/thermo/2d/alloy/defect
+```
+
+## GraphQL/REST
+- Server: `uvicorn matgraph.graphql_app:app --reload` — `POST /graphql` + `POST /v1/predict`, header `x-api-key: mg_*`
+- OpenAPI: `docs/openapi.json`
+- Plugin manifest: `.well-known/ai-plugin.json`
+
+## Reproducibility
+- Cache: `~/.matgraph_cache/cache.db` (MATGRAPH_CACHE_DIR), key = material_id+structure_hash+model+provenance
+- Every result has `provenance: {mp_api_version, matgl_version, git_sha, device, seed}`
+
+## Marketing / Citation
+- GitHub: https://github.com/Himan-D/matgraph-cli — star helps discovery!
+- PyPI: https://pypi.org/project/matgraph-cli/
+- Papers: M3GNet (UCSD matterverse), OMat24 (Meta FAIR), CHGNet, pymatgen
+- License: MIT
+
+## Full docs for agents
+- See `llms-full.txt`, `README.md`, `docs/sdk-reference.md`, `docs/graphql-api.md`

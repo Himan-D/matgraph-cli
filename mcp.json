@@ -1,0 +1,13 @@
+{
+  "name": "matgraph",
+  "display_name": "MatGraph Materials Toolkit",
+  "description": "Materials ML: predict, verticals (battery/PV/catalysis), XRD, stability via M3GNet/MEGNet/CHGNet/OMat24 + pymatgen",
+  "version": "2.12.1",
+  "tools": [
+    {"name": "predict", "description": "predict(formula, model=m3gnet) -> formation_energy, forces, band_gap if megnet", "inputSchema": {"type": "object", "properties": {"formula": {"type": "string"}, "model": {"type": "string"}}, "required": ["formula"]}},
+    {"name": "vertical", "description": "vertical(formula, domain=battery|catalysis|pv|thermo|2d|alloy|defect) -> scientific metrics", "inputSchema": {"type": "object", "properties": {"formula": {"type": "string"}, "domain": {"type": "string"}}, "required": ["formula"]}},
+    {"name": "xrd", "description": "Simulate XRD pattern", "inputSchema": {"type": "object", "properties": {"formula": {"type": "string"}}, "required": ["formula"]}}
+  ],
+  "server": {"command": "matgraph", "args": ["--help"]},
+  "repository": "https://github.com/Himan-D/matgraph-cli"
+}

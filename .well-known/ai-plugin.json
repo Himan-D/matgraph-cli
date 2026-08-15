@@ -1,0 +1,12 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "MatGraph Materials Toolkit",
+  "name_for_model": "matgraph",
+  "description_for_human": "ML predictions for materials: formation energy, band gap, stability, XRD, battery/PV/catalysis verticals via M3GNet/MEGNet/CHGNet/OMat24.",
+  "description_for_model": "MatGraph is a materials-informatics CLI/SDK/GraphQL. Tools: predict(formula, model), substitute, xrd, stability, bands, elastic, dielectric, magnetic, vertical(battery|catalysis|pv|thermo|2d|alloy|defect), finetune, benchmark. Uses pymatgen + matgl + mp-api. Provenance + cache. Install: pip install matgraph-cli. Requires MP_API_KEY env.",
+  "auth": {"type": "none"},
+  "api": {"type": "openapi", "url": "https://raw.githubusercontent.com/Himan-D/matgraph-cli/main/docs/openapi.json", "is_user_authenticated": false},
+  "logo_url": "https://raw.githubusercontent.com/Himan-D/matgraph-cli/main/docs/logo.png",
+  "contact_email": "himan@trinetralabs.ai",
+  "legal_info_url": "https://github.com/Himan-D/matgraph-cli/blob/main/LICENSE"
+}
