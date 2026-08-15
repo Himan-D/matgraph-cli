@@ -1,0 +1,9 @@
+2026-08-16 00:28:45,728 INFO    MainThread:98723 [wandb_setup.py:_flush():81] Current SDK version is 0.28.2
+2026-08-16 00:28:45,728 INFO    MainThread:98723 [wandb_setup.py:_flush():81] Configure stats pid to 98723
+2026-08-16 00:28:45,728 INFO    MainThread:98723 [wandb_setup.py:_flush():81] Loading settings from environment variables
+2026-08-16 00:28:45,728 INFO    MainThread:98723 [wandb_init.py:setup_run_log_directory():739] Logging user logs to /Users/himand/matgraph-cli/wandb/offline-run-20260816_002845-n429t8a5/logs/debug.log
+2026-08-16 00:28:45,729 INFO    MainThread:98723 [wandb_init.py:setup_run_log_directory():740] Logging internal logs to /Users/himand/matgraph-cli/wandb/offline-run-20260816_002845-n429t8a5/logs/debug-internal.log
+2026-08-16 00:28:45,729 INFO    MainThread:98723 [wandb_init.py:init():783] calling init triggers
+2026-08-16 00:28:45,729 INFO    MainThread:98723 [wandb_init.py:init():788] wandb.init called with sweep_config: {}
+config: {'model': 'm3gnet', 'formula': 'Si', '_wandb': {}}
+2026-08-16 00:28:45,729 INFO    MainThread:98723 [wandb_init.py:init():831] starting backend

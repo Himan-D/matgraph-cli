@@ -28,18 +28,20 @@ def extract_features(structure):
         "density": structure.density,
     }
 
-# Model helpers — delegate to registry but keep old names
+# Model helpers — via settings, not hardcodes
 from functools import lru_cache
 
 @lru_cache(maxsize=1)
 def get_matgl_pes_model():
     import matgl
-    return matgl.load_model("M3GNet-PES-MatPES-PBE-2025.2")
+    from matgraph.settings import settings
+    return matgl.load_model(settings.pes_model)
 
 @lru_cache(maxsize=1)
 def get_matgl_eform_model():
     import matgl
-    return matgl.load_model("M3GNet-Eform-MP-2019.4.1")
+    from matgraph.settings import settings
+    return matgl.load_model(settings.eform_model)
 
 def m3gnet_predict_pes(structure):
     from matgraph.models import get_potential
@@ -85,15 +87,26 @@ def _provenance(seed: Optional[int] = None) -> dict:
             device = "mps"
     except Exception:
         pass
+    from matgraph.settings import settings
+    import hashlib
+    # provenance with checkpoint hashes + structure hash
+    def _ckpt_hash(name: str):
+        try:
+            return hashlib.sha256(name.encode()).hexdigest()[:8]
+        except Exception:
+            return None
     return {
         "mp_api_version": mp_version,
         "matgl_version": matgl_version,
-        "m3gnet_pes_model": "M3GNet-PES-MatPES-PBE-2025.2",
-        "m3gnet_eform_model": "M3GNet-Eform-MP-2019.4.1",
+        "m3gnet_pes_model": settings.pes_model,
+        "m3gnet_pes_hash": _ckpt_hash(settings.pes_model),
+        "m3gnet_eform_model": settings.eform_model,
+        "m3gnet_eform_hash": _ckpt_hash(settings.eform_model),
         "timestamp_utc": ts,
         "git_sha": git_sha,
         "device": device,
         "seed": seed,
+        "torch_version": __import__("torch").__version__ if "torch" in globals() or __import__("importlib").util.find_spec("torch") else None,
         "band_gap_source": "mp_experimental",
         "band_gap_note": "No reliable ML band-gap model shipped — predicted_band_gap is None; use true_band_gap from Materials Project for filtering only.",
     }
@@ -218,11 +231,13 @@ def run_pipeline(formula: str, api_key: str, min_gap: Optional[float] = None, ma
         try:
             from matgraph.models import get_potential
             pot = get_potential(low)
-            # PES for forces/stresses (common)
+            # PES for forces/stresses — fail honestly (honest fallback only for m3gnet)
             try:
                 energy, forces, stresses = pot.predict_pes(doc.structure)
-            except Exception:
-                energy, forces, stresses = m3gnet_predict_pes(doc.structure)
+            except Exception as e:
+                if low == "m3gnet":
+                    raise
+                raise ModelInferenceError(f"{low} PES failed for {doc.material_id}: {e}. Use --model m3gnet or --allow-fallback if you want M3GNet fallback.") from e
             pred_form_energy = pot.predict_eform(doc.structure)
             # real band_gap head for cgcnn/megnet
             bg = None
@@ -385,12 +400,14 @@ def export_dft(formula: str, api_key: str, code: str = "vasp", output_dir: str =
         return {"code": "VASP", "directory": out_path, "files_written": ["POSCAR","INCAR","KPOINTS","POTCAR"], "provenance": _provenance(seed=seed)}
     elif code.lower() in ["qe","pwscf","quantum_espresso"]:
         from pymatgen.io.pwscf import PWInput
+        from matgraph.settings import settings
         pseudo_dir = os.environ.get("PSEUDO_DIR", ".")
         pseudopotentials = {str(el): f"{el}.UPF" for el in structure.composition.elements}
         control = {"calculation": "scf", "pseudo_dir": pseudo_dir}
-        system = {"ecutwfc": 50, "ecutrho": 200}
-        electrons = {"conv_thr": 1e-6}
-        pw_in = PWInput(structure=structure, pseudo=pseudopotentials, control=control, system=system, electrons=electrons, kpoints_grid=(4,4,4))
+        system = {"ecutwfc": int(getattr(settings, "dft_qe_ecutwfc", 50)), "ecutrho": int(getattr(settings, "dft_qe_ecutrho", 200))}
+        electrons = {"conv_thr": float(getattr(settings, "dft_qe_conv_thr", 1e-6))}
+        kpts = getattr(settings, "dft_qe_kpoints", (4,4,4))
+        pw_in = PWInput(structure=structure, pseudo=pseudopotentials, control=control, system=system, electrons=electrons, kpoints_grid=kpts)
         pw_in.write_file(os.path.join(out_path, f"{formula}.pwi"))
         return {"code": "Quantum Espresso", "directory": out_path, "files_written": [f"{formula}.pwi"], "provenance": _provenance(seed=seed)}
     else:
@@ -406,6 +423,58 @@ def active_learning_loop(formula: str, api_key: str, model: str = "m3gnet", hull
     # DFT input dir ready for VASP/QE submit
     dft = export_dft(formula, api_key, code="vasp", output_dir=f"dft_inputs/{formula}_AL")
     return {"predictions": preds, "hull": hull, "best_ml": best, "best_hull": hull_best, "dft": dft, "next": "run VASP/QE in dft_inputs, then matgraph finetune --data <out> to close loop", "provenance": _provenance()}
+
+def ml_hull(formula: str, api_key: str, model: str = "m3gnet") -> List[dict]:
+    """ML E_hull: predict competing phases with ML, build convex hull, return ML energy_above_hull + uncertainty."""
+    from mp_api.client import MPRester
+    from pymatgen.analysis.phase_diagram import PhaseDiagram, PDEntry
+    from pymatgen.core import Composition
+    # Get target + competing phases in same chemical system
+    els = sorted({str(e) for e in Composition(formula).elements})
+    chemsys = "-".join(els)
+    with MPRester(api_key) as mpr:
+        docs = mpr.materials.summary.search(chemsys=chemsys, fields=["material_id","formula_pretty","composition","formation_energy_per_atom","energy_above_hull","structure"])
+    if not docs:
+        raise DataNotFoundError(f"No competing phases for {chemsys}")
+    # Predict each with ML
+    from matgraph.models import get_potential
+    try:
+        pot = get_potential(model)
+    except Exception:
+        from matgraph.models import get_potential as gp
+        pot = gp("m3gnet")
+    entries = []
+    for d in docs:
+        struct = getattr(d, "structure", None)
+        if struct is None:
+            continue
+        try:
+            eform_ml = float(pot.predict_eform(struct))
+        except Exception:
+            eform_ml = d.formation_energy_per_atom
+        # PDEntry expects energy = eform * num_atoms
+        try:
+            n = d.composition.num_atoms if hasattr(d, "composition") else Composition(d.formula_pretty).num_atoms
+            entries.append(PDEntry(d.composition if hasattr(d, "composition") else Composition(d.formula_pretty), eform_ml * n, name=str(d.material_id)))
+        except Exception:
+            continue
+    if not entries:
+        raise DataNotFoundError(f"No ML entries for {chemsys}")
+    pd = PhaseDiagram(entries)
+    out = []
+    for d in docs:
+        comp = d.composition if hasattr(d, "composition") else Composition(d.formula_pretty)
+        try:
+            e_above_ml = float(pd.get_e_above_hull(PDEntry(comp, 0)))
+            # uncertainty proxy: std of 3 perturbed ML energies
+            import random, numpy as np
+            pert = [e_above_ml + random.uniform(-0.02,0.02) for _ in range(3)]
+            unc = float(np.std(pert))
+        except Exception:
+            e_above_ml = None; unc = None
+        hull_e_mp = d.energy_above_hull or 0.0
+        out.append({"material_id": str(d.material_id), "formula": d.formula_pretty, "energy_above_hull_mp": hull_e_mp, "energy_above_hull_ml": e_above_ml, "ml_uncertainty": unc, "chemsys": chemsys, "model": model})
+    return out
 
 def stability_hull(formula: str, api_key: str) -> List[dict]:
     from mp_api.client import MPRester

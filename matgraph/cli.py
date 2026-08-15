@@ -517,10 +517,10 @@ def stability(
     with console.status(f"[bold green]Checking convex hull stability for {formula}..."):
         try:
             results = sdk.stability(formula)
-            table = Table(title=f"Convex Hull Stability: {formula}")
+            table = Table(title=f"Convex Hull Stability: {formula} (MP)")
             table.add_column("Material ID", style="cyan")
             table.add_column("Formula", style="magenta")
-            table.add_column("E_above_hull (eV/atom)", justify="right", style="blue")
+            table.add_column("E_above_hull MP (eV/atom)", justify="right", style="blue")
             table.add_column("Status", justify="center")
             for r in results:
                 color = "green" if r["stability_label"] == "Stable" else (
@@ -532,6 +532,18 @@ def stability(
                     f"[{color}]{r['stability_label']}[/{color}]"
                 )
             console.print(table)
+            # ML hull next
+            try:
+                from matgraph.core import ml_hull
+                ml = ml_hull(formula, api_key, model="m3gnet")
+                t2 = Table(title=f"ML E_hull (M3GNet, competing phases)")
+                t2.add_column("Material ID"); t2.add_column("Formula"); t2.add_column("E_hull ML (eV/atom)"); t2.add_column("E_hull MP"); t2.add_column("Unc")
+                for r in ml[:10]:
+                    t2.add_row(r["material_id"], r["formula"], f"{r['energy_above_hull_ml']:.4f}" if r["energy_above_hull_ml"] is not None else "N/A", f"{r['energy_above_hull_mp']:.4f}", f"{r['ml_uncertainty']:.3f}" if r["ml_uncertainty"] else "N/A")
+                console.print(t2)
+                console.print("[dim]ML hull = ML E_form vs competing phases (PhaseDiagram). MP hull is ground truth; ML hull shows model error/uncertainty.[/dim]")
+            except Exception as e:
+                console.print(f"[dim]ML hull unavailable: {e}[/dim]")
         except Exception as e:
             console.print(f"[bold red]Error: {e}[/bold red]")
 

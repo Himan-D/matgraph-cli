@@ -195,5 +195,19 @@ def get_potential(name: str = "m3gnet") -> Potential:
         raise ValueError(f"Unknown model '{name}'. Available: {sorted(REGISTRY)} — install with pip install matgraph-cli[ml] if missing deps")
     return REGISTRY[key]()
 
-def available_models() -> list[str]:
-    return sorted(REGISTRY.keys())
+def available_models(include_unavailable: bool = True) -> list[str]:
+    if include_unavailable:
+        return sorted(REGISTRY.keys())
+    # Hide unavailable: cgcnn needs dgl, omat24 needs fairchem
+    avail = ["m3gnet","megnet","chgnet"]
+    try:
+        import dgl  # noqa
+        avail.append("cgcnn")
+    except Exception:
+        pass
+    try:
+        from fairchem.core.models.equiformer_v2 import EquiformerV2  # noqa
+        avail.extend(["omat24","equiformer"])
+    except Exception:
+        pass
+    return sorted(set(avail))

@@ -77,6 +77,12 @@ if _HAS_PYDANTIC_SETTINGS:
         relax_perturb_distance: float = 0.1
         relax_fmax: float = 0.05
 
+        # dft qe
+        dft_qe_ecutwfc: int = Field(default=50)
+        dft_qe_ecutrho: int = Field(default=200)
+        dft_qe_conv_thr: float = Field(default=1e-6)
+        dft_qe_kpoints: tuple = Field(default=(4,4,4))
+
         # stability
         hull_stable_tol: float = 0.0
         hull_metastable_tol: float = 0.05
@@ -150,6 +156,9 @@ else:
         ga_elite_frac = _env_float("MATGRAPH_GA_ELITE_FRAC",0.2)
         relax_perturb_distance = _env_float("MATGRAPH_RELAX_PERTURB_DISTANCE",0.1)
         relax_fmax = _env_float("MATGRAPH_RELAX_FMAX",0.05)
+        dft_qe_ecutwfc = _env_int("MATGRAPH_DFT_QE_ECUTWFC",50)
+        dft_qe_ecutrho = _env_int("MATGRAPH_DFT_QE_ECUTRHO",200)
+        dft_qe_conv_thr = _env_float("MATGRAPH_DFT_QE_CONV_THR",1e-6)
         hull_stable_tol = _env_float("MATGRAPH_HULL_STABLE_TOL",0.0)
         hull_metastable_tol = _env_float("MATGRAPH_HULL_METASTABLE_TOL",0.05)
         graphql_default_limit = _env_int("MATGRAPH_GRAPHQL_DEFAULT_LIMIT",10)
