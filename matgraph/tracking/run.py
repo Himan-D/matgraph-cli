@@ -60,9 +60,9 @@ class Run:
 
     def log_table(self, name: str, columns: list, data: list):
         # wandb.Table compatible — store as json artifact + log
-        import json, pathlib
+        import json, pathlib, tempfile
         tbl = {"columns": columns, "data": data}
-        p = pathlib.Path(f"/tmp/matgraph_table_{self.id}_{name}.json")
+        p = pathlib.Path(tempfile.gettempdir()) / f"matgraph_table_{self.id}_{name}.json"
         p.write_text(json.dumps(tbl))
         self.log_artifact(str(p), type="table")
         self.log({f"table/{name}": len(data)})

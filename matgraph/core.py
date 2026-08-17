@@ -396,9 +396,17 @@ def export_dft(formula: str, api_key: str, code: str = "vasp", output_dir: str =
     os.makedirs(out_path, exist_ok=True)
     if code.lower() == "vasp":
         from pymatgen.io.vasp.sets import MPRelaxSet
-        vis = MPRelaxSet(structure)
-        vis.write_input(out_path)
-        return {"code": "VASP", "directory": out_path, "files_written": ["POSCAR","INCAR","KPOINTS","POTCAR"], "provenance": _provenance(seed=seed)}
+        try:
+            vis = MPRelaxSet(structure, potcar_spec=True)
+            vis.write_input(out_path)
+        except (TypeError, Exception):
+            try:
+                vis = MPRelaxSet(structure)
+                vis.write_input(out_path, potcar_spec=True)
+            except Exception:
+                vis = MPRelaxSet(structure)
+                vis.write_input(out_path)
+        return {"code": "VASP", "directory": out_path, "files_written": ["POSCAR","INCAR","KPOINTS","POTCAR.spec" if os.path.exists(os.path.join(out_path, "POTCAR.spec")) else "POTCAR"], "provenance": _provenance(seed=seed)}
     elif code.lower() in ["qe","pwscf","quantum_espresso"]:
         from pymatgen.io.pwscf import PWInput
         from matgraph.settings import settings
@@ -852,26 +860,49 @@ def fetch_band_structure(formula: str, api_key: str) -> dict:
                 continue
     raise DataNotFoundError(f"No band structure data found for any polymorph of {formula}")
 
+def _get_material_ids_for_formula(mpr, formula: str) -> List[str]:
+    summary_docs = mpr.materials.summary.search(formula=formula, fields=["material_id"])
+    return [str(d.material_id) for d in summary_docs]
+
 def fetch_elastic(formula: str, api_key: str) -> List[dict]:
     from mp_api.client import MPRester
     with MPRester(api_key) as mpr:
-        docs = mpr.materials.elasticity.search(formula=formula, fields=["material_id","formula_pretty","bulk_modulus","shear_modulus","universal_anisotropy","homogeneous_poisson"])
+        try:
+            ids = _get_material_ids_for_formula(mpr, formula)
+            if not ids:
+                raise DataNotFoundError(f"No materials found for formula {formula}.")
+            docs = mpr.materials.elasticity.search(material_ids=ids, fields=["material_id","formula_pretty","bulk_modulus","shear_modulus","universal_anisotropy","homogeneous_poisson"])
+        except TypeError:
+            docs = mpr.materials.elasticity.search(formula=formula, fields=["material_id","formula_pretty","bulk_modulus","shear_modulus","universal_anisotropy","homogeneous_poisson"])
     if not docs:
         raise DataNotFoundError(f"No elastic data for {formula}. Not all materials have DFT elastic tensors.")
-    return [{"material_id": str(d.material_id), "formula": d.formula_pretty, "bulk_modulus_vrh": d.bulk_modulus.vrh if d.bulk_modulus else None, "shear_modulus_vrh": d.shear_modulus.vrh if d.shear_modulus else None, "universal_anisotropy": d.universal_anisotropy, "homogeneous_poisson": d.homogeneous_poisson} for d in docs]
+    return [{"material_id": str(d.material_id), "formula": getattr(d, 'formula_pretty', formula), "bulk_modulus_vrh": d.bulk_modulus.vrh if getattr(d, 'bulk_modulus', None) else None, "shear_modulus_vrh": d.shear_modulus.vrh if getattr(d, 'shear_modulus', None) else None, "universal_anisotropy": getattr(d, 'universal_anisotropy', None), "homogeneous_poisson": getattr(d, 'homogeneous_poisson', None)} for d in docs]
 
 def fetch_dielectric(formula: str, api_key: str) -> List[dict]:
     from mp_api.client import MPRester
     with MPRester(api_key) as mpr:
-        docs = mpr.materials.dielectric.search(formula=formula, fields=["material_id","formula_pretty","e_total","e_ionic","e_electronic","n"])
+        try:
+            ids = _get_material_ids_for_formula(mpr, formula)
+            if not ids:
+                raise DataNotFoundError(f"No materials found for formula {formula}.")
+            docs = mpr.materials.dielectric.search(material_ids=ids, fields=["material_id","formula_pretty","e_total","e_ionic","e_electronic","n"])
+        except TypeError:
+            docs = mpr.materials.dielectric.search(formula=formula, fields=["material_id","formula_pretty","e_total","e_ionic","e_electronic","n"])
     if not docs:
         raise DataNotFoundError(f"No dielectric data for {formula}.")
-    return [{"material_id": str(d.material_id), "formula": d.formula_pretty, "e_total": d.e_total, "e_ionic": d.e_ionic, "e_electronic": d.e_electronic, "refractive_index": d.n} for d in docs]
+    return [{"material_id": str(d.material_id), "formula": getattr(d, 'formula_pretty', formula), "e_total": getattr(d, 'e_total', None), "e_ionic": getattr(d, 'e_ionic', None), "e_electronic": getattr(d, 'e_electronic', None), "refractive_index": getattr(d, 'n', None)} for d in docs]
 
 def fetch_magnetic(formula: str, api_key: str) -> List[dict]:
     from mp_api.client import MPRester
     with MPRester(api_key) as mpr:
-        docs = mpr.materials.magnetism.search(formula=formula, fields=["material_id","formula_pretty","ordering","total_magnetization","total_magnetization_normalized_vol"])
+        try:
+            ids = _get_material_ids_for_formula(mpr, formula)
+            if not ids:
+                raise DataNotFoundError(f"No materials found for formula {formula}.")
+            docs = mpr.materials.magnetism.search(material_ids=ids, fields=["material_id","formula_pretty","ordering","total_magnetization","total_magnetization_normalized_vol"])
+        except TypeError:
+            docs = mpr.materials.magnetism.search(formula=formula, fields=["material_id","formula_pretty","ordering","total_magnetization","total_magnetization_normalized_vol"])
     if not docs:
         raise DataNotFoundError(f"No magnetic data for {formula}.")
-    return [{"material_id": str(d.material_id), "formula": d.formula_pretty, "ordering": str(d.ordering), "total_magnetization": d.total_magnetization, "magnetization_per_vol": d.total_magnetization_normalized_vol} for d in docs]
+    return [{"material_id": str(d.material_id), "formula": getattr(d, 'formula_pretty', formula), "ordering": str(getattr(d, 'ordering', 'N/A')), "total_magnetization": getattr(d, 'total_magnetization', None), "magnetization_per_vol": getattr(d, 'total_magnetization_normalized_vol', None)} for d in docs]
+
