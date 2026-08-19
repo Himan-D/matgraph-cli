@@ -85,10 +85,12 @@ class MEGNetPotential:
     @lru_cache(maxsize=1)
     def _eform():
         import matgl
-        try:
-            return matgl.load_model("MEGNet-Eform-MP-2019.4.1")
-        except Exception:
-            return matgl.load_model("MEGNet-MP-2019.4.1-Eform")
+        for name in ["MEGNet-Eform-MP-2018.6.1", "MEGNet-Eform-MP-2019.4.1", "MEGNet-MP-2019.4.1-Eform"]:
+            try:
+                return matgl.load_model(name)
+            except Exception:
+                continue
+        raise RuntimeError("No MEGNet Eform model available in MatGL")
 
     @staticmethod
     @lru_cache(maxsize=1)

@@ -51,7 +51,8 @@ def simulate_finetune(data_path: str, base: str = "chgnet", epochs: int = 5, pro
         mae = 0.08 * (0.95 ** ep) + random.uniform(-0.005,0.005)
         run.log({"epoch":ep, "loss":loss, "mae":mae, "n":n})
         metrics = {"loss":loss, "mae":mae, "r2": 0.85 + 0.1*(1 - 0.9**ep)}
-    artifact_path = str(Path(f"/tmp/matgraph_simulate_{base}_{int(time.time())}.json"))
+    import tempfile
+    artifact_path = str(Path(tempfile.gettempdir()) / f"matgraph_simulate_{base}_{int(time.time())}.json")
     Path(artifact_path).write_text(json.dumps({"base":base,"epochs":epochs,"n":n, **metrics, "simulated": True}))
     run.log_artifact(artifact_path, type="model")
     mid = register_model(name=f"{base}-simulated", base=base, dataset=str(p), metrics=metrics, artifact_path=artifact_path)
