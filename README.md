@@ -183,6 +183,21 @@ matgraph xrd LiFePO4
 
 ### Reproducible cache (2.0)
 
+MatGraph integrates with PennyLane to offer hybrid Classical-Quantum models and Variational Quantum Eigensolver (VQE) workflows for highly accurate simulations.
+
+```bash
+# Requires pennylane optional dependency
+pip install matgraph-cli[quantum]
+
+# 1. Run VQE for ground-state energy of a crystal/molecule structure
+matgraph quantum vqe --structure my_molecule.cif
+
+# 2. Train a Hybrid Classical-Quantum GNN readout layer
+matgraph quantum train-qgnn LiFePO4 --base-model m3gnet --qubits 4
+```
+
+### Reproducible cache (2.0)
+
 SQLite + WAL at `~/.matgraph_cache/cache.db` (override `MATGRAPH_CACHE_DIR`), key = `material_id+structure_hash+model+checkpoint+code_version+params`. Reproducibility via `provenance` field on every prediction.
 
 ```bash

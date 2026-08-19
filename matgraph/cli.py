@@ -16,10 +16,12 @@ api_app = typer.Typer(help="Manage API keys for the GraphQL Server (like gh auth
 cache_app = typer.Typer(help="Manage the local query cache")
 track_app = typer.Typer(help="W&B-like experiment tracking for materials")
 config_app = typer.Typer(help="Manage config (like gh config)")
+quantum_app = typer.Typer(help="Quantum Machine Learning and Chemistry (PennyLane integration)")
 app.add_typer(api_app, name="auth")
 app.add_typer(cache_app, name="cache")
 app.add_typer(track_app, name="track")
 app.add_typer(config_app, name="config")
+app.add_typer(quantum_app, name="quantum")
 console = Console()
 
 @cache_app.command("stats")
@@ -1175,6 +1177,28 @@ def serve(port: int = 8000):
     console.print(f"[cyan]Explore the API at http://localhost:{port}/graphql[/cyan]")
     import uvicorn
     uvicorn.run("matgraph.graphql_app:app", host="0.0.0.0", port=port, reload=False)
+
+@quantum_app.command("vqe")
+def vqe_cmd(structure: str = typer.Option(..., "--structure", "-s", help="Path to molecular structure file (e.g., .cif)")):
+    """Run Variational Quantum Eigensolver (VQE) for a structure."""
+    try:
+        from matgraph.quantum.core import run_vqe
+        run_vqe(structure)
+    except ImportError as e:
+        console.print(f"[bold red]Quantum Module Error:[/bold red] {e}")
+
+@quantum_app.command("train-qgnn")
+def train_qgnn_cmd(
+    formula: str = typer.Argument(..., help="Chemical formula to train on"),
+    base_model: str = typer.Option("m3gnet", "--base-model", "-m", help="Classical base model to extract embeddings"),
+    qubits: int = typer.Option(4, "--qubits", "-q", help="Number of qubits for the Variational Quantum Circuit")
+):
+    """Train a hybrid Classical-Quantum GNN using PennyLane."""
+    try:
+        from matgraph.quantum.core import train_hybrid_qgnn
+        train_hybrid_qgnn(formula, base_model, qubits)
+    except ImportError as e:
+        console.print(f"[bold red]Quantum Module Error:[/bold red] {e}")
 
 if __name__ == "__main__":
     app()
