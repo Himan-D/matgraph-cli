@@ -42,15 +42,18 @@ def ml_pes(structure):
         return pot.predict_pes(structure)
 def dl_voltage(eform: float) -> float:
     from matgraph.settings import settings
-    import torch
-    w = float(settings.battery_voltage_w); b = float(settings.battery_voltage_b)
-    v = torch.tensor([-eform * w + b]); v = torch.clamp(v, min=0.2, max=4.8)
-    return float(v.item())
+    w = float(settings.battery_voltage_w)
+    b = float(settings.battery_voltage_b)
+    v = -eform * w + b
+    return max(0.2, min(4.8, v))
+
 def dl_pv(band_gap: float):
-    import torch
-    x = torch.tensor([band_gap]); h = torch.tanh((x - 1.34) * 1.8)
-    sq = 33.7 * torch.exp(-0.5 * h**2 * 2.0); slme = sq * 0.9
-    return float(sq.item()), float(slme.item())
+    import math
+    h = math.tanh((band_gap - 1.34) * 1.8)
+    sq = 33.7 * math.exp(-0.5 * h**2 * 2.0)
+    slme = sq * 0.9
+    return float(sq), float(slme)
+
 def scientific_battery_voltage(structure, eform: Optional[float]):
     """Try pymatgen BatteryAnalyzer via phase diagram; fallback to dl_voltage."""
     from matgraph.settings import settings

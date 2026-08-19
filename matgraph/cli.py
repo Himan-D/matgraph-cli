@@ -967,21 +967,8 @@ def generate(chemistry: str = typer.Option("Li-Fe-O", "--chemistry", "-c", help=
 @app.command()
 def dataset_version(path: str = typer.Argument(..., help="CSV or CIF dir to version (DVC-like)")):
     """Version a dataset (like dvc add) — local hash + registry."""
-    from matgraph.data.versioning import version_dataset
-    vid=version_dataset(path, meta={"cli":"version"})
     console.print(f"[green]Dataset {path} -> {vid}[/green]")
 
-@app.command()
-def dataset_list():
-    """List versioned datasets."""
-    from matgraph.data.versioning import list_datasets
-    from rich.table import Table
-    rows=list_datasets()
-    t=Table(title="Datasets")
-    t.add_column("Version"); t.add_column("Path"); t.add_column("Hash")
-    for r in rows[:20]:
-        t.add_row(r["version"], r["path"], r["hash"])
-    console.print(t)
 
 @app.command()
 def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir with DFT data"), base: str = typer.Option("chgnet", "--base", "-b", help="Base FMM: chgnet|m3gnet|megnet"), epochs: int = typer.Option(5, "--epochs", "-e"), project: str = typer.Option("finetune", "--project", "-p")):

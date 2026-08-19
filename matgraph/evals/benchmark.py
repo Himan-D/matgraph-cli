@@ -46,65 +46,27 @@ def _chemsys_of_result(r: Dict[str, Any]) -> str:
 
 
 def _compute_metrics(y_true: List[float], y_pred: List[float]) -> Dict[str, Any]:
-    """Compute MAE/RMSE/R2/Spearman/ROC-AUC/calibration."""
+    """Compute MAE/RMSE/R2/Spearman/ROC-AUC/calibration using sklearn and scipy."""
     n = len(y_true)
     if n == 0:
-        return {"mae": float("nan"), "rmse": float("nan"), "r2": float("nan"), "spearman": float("nan"), "roc_auc": float("nan"), "ece": float("nan"), "n": 0}
-    # try sklearn, else manual
-    try:
-        from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, roc_auc_score
-        mae = float(mean_absolute_error(y_true, y_pred))
-        try:
-            rmse = float(mean_squared_error(y_true, y_pred, squared=False))
-        except TypeError:
-            rmse = float(math.sqrt(mean_squared_error(y_true, y_pred)))
-        try:
-            r2 = float(r2_score(y_true, y_pred))
-        except Exception:
-            r2 = float("nan")
-    except Exception:
-        # manual fallback
-        mae = sum(abs(a - b) for a, b in zip(y_true, y_pred)) / n
-        mse = sum((a - b) ** 2 for a, b in zip(y_true, y_pred)) / n
-        rmse = math.sqrt(mse)
-        # r2 manual
-        mean_true = sum(y_true) / n
-        ss_tot = sum((a - mean_true) ** 2 for a in y_true)
-        ss_res = sum((a - b) ** 2 for a, b in zip(y_true, y_pred))
-        r2 = 1 - ss_res / ss_tot if ss_tot != 0 else float("nan")
+        return {"mae": float("nan"), "rmse": float("nan"), "r2": float("nan"), "spearman": float("nan"), "roc_auc": float("nan"), "ece": float("nan"), "n": 0, "stable_true": 0, "stable_pred": 0}
 
-    # Spearman
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, roc_auc_score
+    from scipy.stats import spearmanr
+    
+    mae = float(mean_absolute_error(y_true, y_pred))
+    rmse = float(math.sqrt(mean_squared_error(y_true, y_pred)))
     try:
-        from scipy.stats import spearmanr
+        r2 = float(r2_score(y_true, y_pred))
+    except Exception:
+        r2 = float("nan")
+        
+    try:
         spear = float(spearmanr(y_true, y_pred).correlation)
     except Exception:
-        try:
-            raise ImportError("force manual fallback")
-        except Exception:
-            # manual rank correlation via sorted ranks
-            try:
-                # simple spearman via rank differences
-                def rankdata(a):
-                    sorted_a = sorted((v, i) for i, v in enumerate(a))
-                    ranks = [0]*len(a)
-                    for rank, (_, idx) in enumerate(sorted_a):
-                        ranks[idx] = rank
-                    return ranks
-                rx = rankdata(y_true)
-                ry = rankdata(y_pred)
-                # pearson on ranks
-                mx = sum(rx)/n
-                my = sum(ry)/n
-                num = sum((rx[i]-mx)*(ry[i]-my) for i in range(n))
-                den = math.sqrt(sum((rx[i]-mx)**2 for i in range(n)) * sum((ry[i]-my)**2 for i in range(n)))
-                spear = float(num/den) if den != 0 else float("nan")
-            except Exception:
-                spear = float("nan")
-
-    # ROC-AUC for stability classification (true label = e_form < 0)
+        spear = float("nan")
+        
     y_true_stable = [1 if v < 0 else 0 for v in y_true]
-    # use predicted stability probability proxy: sigmoid(-y_pred) or simple threshold
-    # We'll map predicted e_form to probability of stable via logistic
     def _sigmoid(x):
         try:
             return 1/(1+math.exp(x))

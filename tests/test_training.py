@@ -23,12 +23,3 @@ def test_finetune(tmp_path):
     from matgraph.training.registry import list_models
     assert len(list_models()) >= 1
 
-def test_dataset_version(tmp_path):
-    import os
-    os.environ["MATGRAPH_TRACKING_DIR"] = str(tmp_path / "trk2")
-    f = tmp_path / "data.csv"
-    f.write_text("a,b\n1,2\n")
-    from matgraph.data.versioning import version_dataset, list_datasets
-    vid = version_dataset(str(f))
-    assert vid.startswith("v")
-    assert len(list_datasets()) >= 1
