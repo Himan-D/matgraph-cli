@@ -1,6 +1,0 @@
-2026-08-16 00:45:47,412 INFO    MainThread:9121 [wandb_init.py:setup_run_log_directory():739] Logging user logs to /Users/himand/matgraph-cli/wandb/offline-run-20260816_004547-z5sw27by/logs/debug.log
-2026-08-16 00:45:47,412 INFO    MainThread:9121 [wandb_init.py:setup_run_log_directory():740] Logging internal logs to /Users/himand/matgraph-cli/wandb/offline-run-20260816_004547-z5sw27by/logs/debug-internal.log
-2026-08-16 00:45:47,412 INFO    MainThread:9121 [wandb_init.py:init():783] calling init triggers
-2026-08-16 00:45:47,412 INFO    MainThread:9121 [wandb_init.py:init():788] wandb.init called with sweep_config: {}
-config: {'_wandb': {}}
-2026-08-16 00:45:47,413 INFO    MainThread:9121 [wandb_init.py:init():831] starting backend
