@@ -686,14 +686,11 @@ def active_learning_loop(
         if retrain and (it < iterations - 1 or iterations == 1):
             try:
                 from matgraph.training.finetune import finetune as _ft
-                # Use dataset_path as training data; if not enough samples, skip
-                _ft(data_path=dataset_path, base=model, epochs=2, project=f"al-{formula}")
-            except Exception:
-                try:
-                    from matgraph.training.finetune import simulate_finetune as _sf
-                    _sf(data_path=dataset_path, base=model, epochs=2, project=f"al-{formula}")
-                except Exception:
-                    pass
+                _ft(data_path=dataset_path, base="scratch", epochs=2, project=f"al-{formula}",
+                    target="formation_energy_per_atom")
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Retrain skipped at iteration %s: %s", it, e)
 
         # Prepare next pool: remove selected, replenish with new heurstic candidates to keep pool_size
         pool = [c["formula"] for c in scored[n_select:]]

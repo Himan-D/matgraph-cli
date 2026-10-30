@@ -984,24 +984,96 @@ def dataset_list():
     console.print(t)
 
 @app.command()
-def finetune(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir with DFT data"), base: str = typer.Option("chgnet", "--base", "-b", help="Base FMM: chgnet|m3gnet|megnet"), epochs: int = typer.Option(5, "--epochs", "-e"), project: str = typer.Option("finetune", "--project", "-p")):
-    """Fine-tune FMM — real training when deps present, else honest error. Demo: finetune --simulate."""
+def train(
+    data: str = typer.Option(..., "--data", "-d", help="Dataset: .csv (structure JSON or cif column) or .jsonl (MaterialRecords)"),
+    target: str = typer.Option("formation_energy_per_atom", "--target", "-t", help="Numeric column/field to predict"),
+    base: str = typer.Option("scratch", "--base", "-b", help="'scratch' or path to a matgraph .pt checkpoint to continue from"),
+    epochs: int = typer.Option(20, "--epochs", "-e"),
+    lr: float = typer.Option(1e-3, "--lr"),
+    patience: int = typer.Option(5, "--patience", help="Early-stop after N epochs without val improvement (0 = off)"),
+    project: str = typer.Option("train", "--project", "-p"),
+    seed: int = typer.Option(0, "--seed"),
+):
+    """Train a crystal graph model on your data. Metrics are computed on a held-out validation split."""
     from matgraph.training.finetune import finetune as _ft
+    from matgraph.exceptions import MatGraphError
     try:
-        res = _ft(data_path=data, base=base, epochs=epochs, project=project)
-        console.print(f"[green]Finetuned {base} on {res['n']} samples → {res['model_id']}[/green]")
-        console.print(f"Metrics: {res['metrics']}")
-        console.print(f"Artifact: {res['artifact']}")
-    except Exception as e:
-        console.print(f"[red]Finetune error (real training required — use --simulate for demo): {e}[/red]"); raise typer.Exit(1)
+        res = _ft(data_path=data, base=base, epochs=epochs, project=project, target=target,
+                  lr=lr, patience=patience or None, seed=seed)
+    except (MatGraphError, ValueError, FileNotFoundError) as e:
+        console.print(f"[red]Training failed: {e}[/red]"); raise typer.Exit(1)
+    m = res["metrics"]
+    console.print(f"[green]Trained on {m['n_train']} crystals, validated on {m['n_val']} → {res['model_id']}[/green]")
+    console.print(f"Validation MAE: [bold]{m['val_mae']:.4f}[/bold] (best epoch {m['best_epoch']} of {m['epochs_run']})")
+    console.print(f"Checkpoint: {res['checkpoint']}")
 
 @app.command()
-def finetune_simulate(data: str = typer.Option(..., "--data", "-d", help="CSV or CIF dir"), base: str = typer.Option("chgnet", "--base", "-b"), epochs: int = typer.Option(5, "--epochs", "-e"), project: str = typer.Option("finetune", "--project", "-p")):
-    """Simulated finetune (demo only) — writes fake metrics, not real training."""
-    from matgraph.training.finetune import simulate_finetune as _sf
-    res = _sf(data_path=data, base=base, epochs=epochs, project=project)
-    console.print(f"[yellow]Simulated {base} on {res['n']} samples → {res['model_id']} (NOT real training)[/yellow]")
+def finetune(
+    data: str = typer.Option(..., "--data", "-d", help="Dataset: .csv or .jsonl"),
+    base: str = typer.Option("scratch", "--base", "-b", help="'scratch' or matgraph .pt checkpoint (MatGL bases are not supported)"),
+    epochs: int = typer.Option(20, "--epochs", "-e"),
+    target: str = typer.Option("formation_energy_per_atom", "--target", "-t"),
+    project: str = typer.Option("finetune", "--project", "-p"),
+):
+    """Fine-tune a matgraph model on your data (same as `train`)."""
+    from matgraph.training.finetune import finetune as _ft
+    from matgraph.exceptions import MatGraphError
+    try:
+        res = _ft(data_path=data, base=base, epochs=epochs, project=project, target=target)
+    except (MatGraphError, ValueError, FileNotFoundError) as e:
+        console.print(f"[red]Finetune failed: {e}[/red]"); raise typer.Exit(1)
+    console.print(f"[green]Finetuned on {res['n']} crystals → {res['model_id']}[/green]")
     console.print(f"Metrics: {res['metrics']}")
+    console.print(f"Artifact: {res['artifact']}")
+
+nn_app = typer.Typer(help="Native PyTorch crystal models: predict and ensemble uncertainty")
+app.add_typer(nn_app, name="nn")
+
+@nn_app.command("predict")
+def nn_predict(
+    data: str = typer.Option(..., "--data", "-d", help="Dataset .csv or .jsonl (target column optional for prediction)"),
+    checkpoint: list[str] = typer.Option(..., "--checkpoint", "-c", help="Checkpoint .pt; repeat for an ensemble (spread = uncertainty)"),
+    target: str = typer.Option("formation_energy_per_atom", "--target", "-t"),
+    out: Optional[str] = typer.Option(None, "--out", "-o", help="Optional CSV output path"),
+):
+    """Predict with one or more trained checkpoints. Several checkpoints also give the std across them."""
+    import csv as _csv
+    from torch.utils.data import DataLoader
+    from matgraph.exceptions import MatGraphError
+    from matgraph.nn import Trainer, collate_crystals, load_checkpoint, CrystalDataset
+    from matgraph.nn.data import load_dataset
+    from matgraph.nn.ensemble import predict_ensemble
+    try:
+        ds = load_dataset(data, target)
+        loader = DataLoader(ds, batch_size=32, collate_fn=collate_crystals)
+        models = [load_checkpoint(c, device="cpu") for c in checkpoint]
+        if len(models) == 1:
+            mean = Trainer(models[0], device="cpu").predict(loader)
+            std = None
+        else:
+            mean, std = predict_ensemble(models, loader, device="cpu")
+    except (MatGraphError, ValueError, FileNotFoundError) as e:
+        console.print(f"[red]Predict failed: {e}[/red]"); raise typer.Exit(1)
+
+    rows = []
+    for i, g in enumerate(ds.graphs):
+        row = {"index": i, "prediction": float(mean[i, 0])}
+        if std is not None:
+            row["std"] = float(std[i, 0])
+        if g.target is not None:
+            row["target"] = float(g.target[0])
+        rows.append(row)
+    t = Table(title=f"Predictions ({len(models)} model{'s' if len(models) > 1 else ''})")
+    for col in rows[0]:
+        t.add_column(col)
+    for r in rows[:50]:
+        t.add_row(*[f"{v:.4f}" if isinstance(v, float) else str(v) for v in r.values()])
+    console.print(t)
+    if out:
+        with open(out, "w", newline="") as fh:
+            w = _csv.DictWriter(fh, fieldnames=list(rows[0]))
+            w.writeheader(); w.writerows(rows)
+        console.print(f"Wrote {len(rows)} rows → {out}")
 
 @app.command(name="al-loop")
 def al_loop(

@@ -7,21 +7,23 @@ def test_registry_empty():
     from matgraph.training.registry import list_models
     assert list_models() == []
 
-def test_finetune(tmp_path):
-    import os, pytest
-    os.environ["MATGRAPH_TRACKING_DIR"] = str(tmp_path / "trk")
+def test_finetune_rejects_missing_structures_and_matgl_bases(tmp_path, monkeypatch):
+    import pytest
+    monkeypatch.setenv("MATGRAPH_TRACKING_DIR", str(tmp_path / "trk"))
+    monkeypatch.chdir(tmp_path)
     csv = tmp_path / "dft.csv"
     csv.write_text("formula,energy\nLi2O,-1.0\nNaCl,-2.0\n")
-    from matgraph.training.finetune import finetune, simulate_finetune
-    from matgraph.exceptions import ModelInferenceError
-    # Real finetune must fail honestly (no fake metrics)
-    with pytest.raises(ModelInferenceError):
+    from matgraph.training import finetune as ft_module
+    from matgraph.training.finetune import finetune
+    from matgraph.exceptions import ModelLoadError, ValidationError
+    # No structure column: rejected, never fabricated
+    with pytest.raises(ValidationError):
+        finetune(str(csv), epochs=2, target="energy", project="ut")
+    # MatGL foundation models are a different architecture: honest error
+    with pytest.raises(ModelLoadError):
         finetune(str(csv), base="m3gnet", epochs=2, project="ut")
-    # Simulated is explicit
-    res = simulate_finetune(str(csv), base="m3gnet", epochs=2, project="ut")
-    assert "model_id" in res and res["n"] >= 2 and res.get("simulated")
-    from matgraph.training.registry import list_models
-    assert len(list_models()) >= 1
+    # The simulated path is gone
+    assert not hasattr(ft_module, "simulate_finetune")
 
 def test_dataset_version(tmp_path):
     import os

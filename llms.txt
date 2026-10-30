@@ -10,7 +10,8 @@
 - `matgraph substitute LiFePO4 Li Na` — heuristic stability via ML PES
 - `matgraph xrd|stability|bands|elastic|dielectric|magnetic|phonon <formula>` — MP-grounded properties
 - `matgraph vertical <formula> --domain battery|catalysis|pv|thermo|2d|alloy|defect|all` — ML + pymatgen/BoltzTraP2 verticals, all via `MATGRAPH_*` env, zero hardcodes
-- `matgraph finetune --data DFT.csv --base chgnet --epochs 5` — active-learning on own DFT data, logs to wandb-like local tracking + model registry
+- `matgraph train --data DFT.csv --target formation_energy_per_atom --epochs 20` — trains a native PyTorch crystal graph model (matgraph.nn) on your CSV (`structure` JSON or `cif` column) or JSONL; reports validation MAE on a held-out split, logs to local tracking, registers the checkpoint
+- `matgraph nn predict --data new.csv -c model.pt [-c model2.pt ...]` — predictions; several checkpoints add an ensemble std as uncertainty
 - `matgraph benchmark --formula Si --model m3gnet --time-split` — time-split MAE/RMSE/R2
 - `matgraph generate --chemistry Li-Fe-O --count 10 --diffusion` — hypothetical screening
 - `matgraph relax|dft|evolve|design` — structure work
