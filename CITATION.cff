@@ -1,0 +1,24 @@
+# This file enables GitHub's "Cite this repository" button and lets
+# scholars cite MatGraph. If you use MatGraph in published work, cite it.
+cff-version: 1.2.0
+title: "MatGraph: Deep Learning Toolkit for Materials Science"
+message: "If you use MatGraph in your research, please cite it as below."
+type: software
+authors:
+  - given-names: Himan
+    family-names: D
+    email: himan@trinetralabs.ai
+repository-code: "https://github.com/Himan-D/matgraph-cli"
+url: "https://pypi.org/project/matgraph-cli/"
+license: MIT
+version: 3.0.0
+date-released: 2026-11-14
+keywords:
+  - materials-science
+  - materials-informatics
+  - machine-learning
+  - graph-neural-networks
+  - m3gnet
+  - pymatgen
+  - batteries
+  - crystallography

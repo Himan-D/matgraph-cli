@@ -10,14 +10,22 @@ from matgraph.config import get_api_key
 from matgraph.exceptions import ValidationError
 
 class MatGraphSDK:
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, demo: bool = False):
+        self.demo = demo
         self.api_key = api_key or get_api_key()
-        if not self.api_key:
-            raise ValueError("Materials Project API key is required. Run 'matgraph setup <KEY>' or set MP_API_KEY.")
+        if not self.api_key and not self.demo:
+            raise ValueError("Materials Project API key is required. Run 'matgraph setup <KEY>' or set MP_API_KEY — or use MatGraphSDK(demo=True) for bundled samples.")
 
-    def predict(self, formula: str, model: str = "m3gnet", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, seed: Optional[int] = None, as_frame: Optional[str] = None, track: bool = False, project: str = "matgraph") -> Union[List[Dict[str, Any]], Any]:
-        """Predict with optional DataFrame return: as_frame='pandas'|'polars'. If track=True, logs wandb-like run."""
-        results = run_pipeline(formula=formula, api_key=self.api_key, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=model, seed=seed)
+    def _use_demo(self, demo: Optional[bool]) -> bool:
+        return self.demo if demo is None else demo
+
+    def predict(self, formula: str, model: str = "m3gnet", min_gap: Optional[float] = None, max_gap: Optional[float] = None, crystal_system: Optional[str] = None, seed: Optional[int] = None, as_frame: Optional[str] = None, track: bool = False, project: str = "matgraph", demo: Optional[bool] = None) -> Union[List[Dict[str, Any]], Any]:
+        """Predict with optional DataFrame return: as_frame='pandas'|'polars'. If track=True, logs wandb-like run. demo=True uses bundled samples (no key needed)."""
+        if self._use_demo(demo):
+            from matgraph.demo import demo_predict
+            results = demo_predict(formula, model=model)
+        else:
+            results = run_pipeline(formula=formula, api_key=self.api_key, min_gap=min_gap, max_gap=max_gap, crystal_system=crystal_system, model=model, seed=seed)
         if track:
             try:
                 from matgraph.tracking import init
@@ -98,10 +106,16 @@ class MatGraphSDK:
             "samples_evaluated": len(results)
         }
 
-    def substitute(self, formula: str, element_out: str, element_in: str, seed: Optional[int] = None) -> Dict[str, Any]:
+    def substitute(self, formula: str, element_out: str, element_in: str, seed: Optional[int] = None, demo: Optional[bool] = None) -> Dict[str, Any]:
+        if self._use_demo(demo):
+            from matgraph.demo import demo_substitute
+            return demo_substitute(formula, element_out, element_in)
         return substitute_material(formula, element_out, element_in, self.api_key, seed=seed)
 
-    def xrd(self, formula: str) -> Dict[str, Any]:
+    def xrd(self, formula: str, demo: Optional[bool] = None) -> Dict[str, Any]:
+        if self._use_demo(demo):
+            from matgraph.demo import demo_xrd
+            return demo_xrd(formula)
         docs = fetch_materials_data(formula, self.api_key)
         if not docs or not docs[0].structure:
             raise ValueError(f"No crystal structure found for {formula}")
@@ -123,6 +137,22 @@ class MatGraphSDK:
 
     def export_dft(self, formula: str, code: str = "vasp", output_dir: str = "dft_inputs", seed: Optional[int] = None) -> Dict[str, Any]:
         return export_dft(formula, self.api_key, code=code, output_dir=output_dir, seed=seed)
+
+    def battery(self, formula: str, demo: Optional[bool] = None) -> Dict[str, Any]:
+        """Battery cathode screening: capacity + ML voltage estimate."""
+        if self._use_demo(demo):
+            from matgraph.demo import demo_battery
+            return demo_battery(formula)
+        from matgraph.verticals.battery import battery_metrics
+        struct, fe = None, None
+        try:
+            docs = fetch_materials_data(formula, self.api_key)
+            if docs:
+                struct = docs[0].structure
+                fe = docs[0].formation_energy_per_atom
+        except Exception:
+            pass
+        return battery_metrics(formula, structure=struct, formation_energy_per_atom=fe)
 
     def stability(self, formula: str) -> List[Dict[str, Any]]:
         return stability_hull(formula, self.api_key)

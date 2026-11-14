@@ -24,6 +24,25 @@ app.add_typer(config_app, name="config")
 app.add_typer(quantum_app, name="quantum")
 console = Console()
 
+# Rich markup swallows `[ml]`-style tags in printed text (e.g. MissingExtraError
+# hints, BANNER). Those names are never valid rich styles, so escape them once
+# here instead of at every error-print site.
+_EXTRA_TAGS = ("mp", "ml", "parquet", "polars", "dft", "api", "ui", "tracking", "diffusion", "omat24", "quantum", "all", "dev")
+_console_print = console.print
+
+
+def _print_preserving_extras(*args, **kwargs):
+    def esc(a):
+        if isinstance(a, str):
+            for tag in _EXTRA_TAGS:
+                a = a.replace(f"[{tag}]", f"\\[{tag}]")
+        return a
+
+    return _console_print(*[esc(a) for a in args], **kwargs)
+
+
+console.print = _print_preserving_extras
+
 @cache_app.command("stats")
 def cache_stats_cmd():
     """Show cache size and entry count."""
@@ -118,12 +137,14 @@ def predict(
     seed: Optional[int] = typer.Option(None, "--seed", help="Random seed for deterministic relax/perturb"),
     as_frame: bool = typer.Option(False, "--as-frame", help="Print as pandas table shape instead of Rich table (for scripting)"),
     uq: bool = typer.Option(False, "--uq", help="Show ensemble uncertainty (std over 3 perturbed runs)"),
-    viz: bool = typer.Option(False, "--viz", help="Write parity CSV to viz_parity.csv")
+    viz: bool = typer.Option(False, "--viz", help="Write parity CSV to viz_parity.csv"),
+    demo: bool = typer.Option(False, "--demo", help="Zero-config demo: bundled sample output, no API key or ML stack needed")
 ):
     """Run the complete ML pipeline with advanced search filters and data saving."""
     api_key = get_api_key()
-    if not api_key:
+    if not api_key and not demo:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
+        console.print("[dim]Tip: add --demo for a zero-config sample run, or: export MP_API_KEY=\"...\"[/dim]")
         raise typer.Exit(code=1)
     
     console.print(f"[cyan]Searching and running ML pipeline for {formula} using {model.upper()}...[/cyan]")
@@ -132,15 +153,20 @@ def predict(
     
     try:
         from matgraph.exceptions import ValidationError, DataNotFoundError, ModelInferenceError
-        results = run_pipeline(
-            formula=formula, 
-            api_key=api_key, 
-            min_gap=min_gap, 
-            max_gap=max_gap, 
-            crystal_system=crystal_system,
-            model=model,
-            seed=seed
-        )
+        if demo:
+            from matgraph.demo import BANNER, demo_predict
+            console.print(BANNER)
+            results = demo_predict(formula, model=model)
+        else:
+            results = run_pipeline(
+                formula=formula,
+                api_key=api_key,
+                min_gap=min_gap,
+                max_gap=max_gap,
+                crystal_system=crystal_system,
+                model=model,
+                seed=seed
+            )
         
         if not results:
             console.print(f"[yellow]No materials found matching the criteria.[/yellow]")
@@ -222,30 +248,38 @@ def predict(
         console.print(f"[red]Pipeline Error: {e}[/red]")
 
 @app.command()
-def xrd(formula: str):
+def xrd(formula: str, demo: bool = typer.Option(False, "--demo", help="Zero-config demo: bundled sample output, no API key or ML stack needed")):
     """Simulate X-Ray Diffraction (XRD) patterns for materials."""
     from matgraph.core import fetch_materials_data, simulate_xrd
     api_key = get_api_key()
-    if not api_key:
+    if not api_key and not demo:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
+        console.print("[dim]Tip: add --demo for a zero-config sample run, or: export MP_API_KEY=\"...\"[/dim]")
         raise typer.Exit(code=1)
-        
+
     console.print(f"[cyan]Fetching structures and simulating XRD for {formula}...[/cyan]")
     try:
-        docs = fetch_materials_data(formula, api_key)
-        if not docs:
-            console.print("[yellow]No materials found.[/yellow]")
-            return
-            
-        # Simulate XRD for the best match
-        doc = docs[0]
-        if not doc.structure:
-            console.print("[red]No structure available to simulate XRD.[/red]")
-            return
-            
-        xrd_data = simulate_xrd(doc.structure)
-        
-        table = Table(title=f"XRD Peaks (Cu-Ka) for {doc.formula_pretty} ({doc.material_id})")
+        if demo:
+            from matgraph.demo import BANNER, demo_xrd
+            console.print(BANNER)
+            xrd_data = demo_xrd(formula)
+            title_formula, title_id = xrd_data["formula"], xrd_data["material_id"]
+        else:
+            docs = fetch_materials_data(formula, api_key)
+            if not docs:
+                console.print("[yellow]No materials found.[/yellow]")
+                return
+
+            # Simulate XRD for the best match
+            doc = docs[0]
+            if not doc.structure:
+                console.print("[red]No structure available to simulate XRD.[/red]")
+                return
+
+            xrd_data = simulate_xrd(doc.structure)
+            title_formula, title_id = doc.formula_pretty, doc.material_id
+
+        table = Table(title=f"XRD Peaks (Cu-Ka) for {title_formula} ({title_id})")
         table.add_column("2θ (degrees)", justify="right", style="cyan")
         table.add_column("Intensity (%)", justify="right", style="green")
         table.add_column("hkl", style="magenta")
@@ -302,20 +336,26 @@ def evaluate(formula: str, model: str = typer.Option("m3gnet", "--model", help="
         console.print(f"[red]Evaluation Error: {e}[/red]")
 
 @app.command()
-def substitute(formula: str, elem_out: str, elem_in: str, seed: Optional[int] = typer.Option(None, "--seed", help="Seed for determinism")):
+def substitute(formula: str, elem_out: str, elem_in: str, seed: Optional[int] = typer.Option(None, "--seed", help="Seed for determinism"), demo: bool = typer.Option(False, "--demo", help="Zero-config demo: bundled sample output, no API key or ML stack needed")):
     """
     (GNoME-inspired) Perform hypothetical elemental substitution to predict stability of a new material.
     e.g., matgraph substitute LiFePO4 Li Na
     """
     from matgraph.core import substitute_material
     api_key = get_api_key()
-    if not api_key:
+    if not api_key and not demo:
         console.print("[red]Error: MP_API_KEY is not set.[/red]")
+        console.print("[dim]Tip: add --demo for a zero-config sample run, or: export MP_API_KEY=\"...\"[/dim]")
         raise typer.Exit(code=1)
-        
+
     console.print(f"[cyan]Generative Discovery: Substituting {elem_out} with {elem_in} in {formula}...[/cyan]")
     try:
-        res = substitute_material(formula, elem_out, elem_in, api_key, seed=seed)
+        if demo:
+            from matgraph.demo import BANNER, demo_substitute
+            console.print(BANNER)
+            res = demo_substitute(formula, elem_out, elem_in)
+        else:
+            res = substitute_material(formula, elem_out, elem_in, api_key, seed=seed)
         
         table = Table(title=f"Thermodynamic Stability Analysis")
         table.add_column("Material", style="magenta")
@@ -995,12 +1035,12 @@ def train(
     seed: int = typer.Option(0, "--seed"),
 ):
     """Train a crystal graph model on your data. Metrics are computed on a held-out validation split."""
-    from matgraph.training.finetune import finetune as _ft
     from matgraph.exceptions import MatGraphError
     try:
+        from matgraph.training.finetune import finetune as _ft
         res = _ft(data_path=data, base=base, epochs=epochs, project=project, target=target,
                   lr=lr, patience=patience or None, seed=seed)
-    except (MatGraphError, ValueError, FileNotFoundError) as e:
+    except (MatGraphError, ValueError, FileNotFoundError, ImportError) as e:
         console.print(f"[red]Training failed: {e}[/red]"); raise typer.Exit(1)
     m = res["metrics"]
     console.print(f"[green]Trained on {m['n_train']} crystals, validated on {m['n_val']} → {res['model_id']}[/green]")
@@ -1016,11 +1056,11 @@ def finetune(
     project: str = typer.Option("finetune", "--project", "-p"),
 ):
     """Fine-tune a matgraph model on your data (same as `train`)."""
-    from matgraph.training.finetune import finetune as _ft
     from matgraph.exceptions import MatGraphError
     try:
+        from matgraph.training.finetune import finetune as _ft
         res = _ft(data_path=data, base=base, epochs=epochs, project=project, target=target)
-    except (MatGraphError, ValueError, FileNotFoundError) as e:
+    except (MatGraphError, ValueError, FileNotFoundError, ImportError) as e:
         console.print(f"[red]Finetune failed: {e}[/red]"); raise typer.Exit(1)
     console.print(f"[green]Finetuned on {res['n']} crystals → {res['model_id']}[/green]")
     console.print(f"Metrics: {res['metrics']}")
@@ -1038,12 +1078,12 @@ def nn_predict(
 ):
     """Predict with one or more trained checkpoints. Several checkpoints also give the std across them."""
     import csv as _csv
-    from torch.utils.data import DataLoader
     from matgraph.exceptions import MatGraphError
-    from matgraph.nn import Trainer, collate_crystals, load_checkpoint, CrystalDataset
-    from matgraph.nn.data import load_dataset
-    from matgraph.nn.ensemble import predict_ensemble
     try:
+        from torch.utils.data import DataLoader
+        from matgraph.nn import Trainer, collate_crystals, load_checkpoint, CrystalDataset
+        from matgraph.nn.data import load_dataset
+        from matgraph.nn.ensemble import predict_ensemble
         ds = load_dataset(data, target)
         loader = DataLoader(ds, batch_size=32, collate_fn=collate_crystals)
         models = [load_checkpoint(c, device="cpu") for c in checkpoint]
@@ -1052,7 +1092,7 @@ def nn_predict(
             std = None
         else:
             mean, std = predict_ensemble(models, loader, device="cpu")
-    except (MatGraphError, ValueError, FileNotFoundError) as e:
+    except (MatGraphError, ValueError, FileNotFoundError, ImportError) as e:
         console.print(f"[red]Predict failed: {e}[/red]"); raise typer.Exit(1)
 
     rows = []
@@ -1139,7 +1179,11 @@ except Exception:
 @app.command()
 def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), domain: str = typer.Option("all", "--domain", "-d", help="battery|catalysis|pv|thermo|2d|alloy|defect|all"), use_scientific: bool = typer.Option(True, "--use-scientific/--no-scientific", help="Use pymatgen/BoltzTraP2 when installed")):
     """Research verticals: battery, catalysis, PV, thermo, 2D, alloys, defects — ML + scientific libs."""
-    from pymatgen.core import Composition
+    try:
+        from pymatgen.core import Composition  # noqa: F401 (validates [mp] present)
+    except ImportError as e:
+        console.print(f"[red]Vertical failed: {e}[/red]")
+        raise typer.Exit(1) from None
     api_key = get_api_key()
     # try fetch MP truth for gap/formation_energy/density/structure
     bg, fe, dens, struct = None, None, None, None
@@ -1188,6 +1232,62 @@ def vertical(formula: str = typer.Argument(..., help="Formula e.g. LiFePO4"), do
             from matgraph.verticals.defects import defect_metrics
             m=defect_metrics(formula, formation_energy_per_atom=fe)
             console.print(f"[bold]Defect[/bold] E_vac={m['vacancy_formation_eV_proxy']} eV [{m['method']}]")
+
+@app.command()
+def battery(
+    formula: str = typer.Argument(..., help="Cathode formula, e.g. LiFePO4"),
+    demo: bool = typer.Option(False, "--demo", help="Zero-config demo: bundled sample output, no API key or ML stack needed"),
+):
+    """Battery cathode screening: theoretical capacity + ML voltage estimate."""
+    if demo:
+        from matgraph.demo import BANNER, demo_battery
+
+        console.print(BANNER)
+        try:
+            m = demo_battery(formula)
+        except Exception as e:
+            console.print(f"[red]Battery Error: {e}[/red]")
+            return
+    else:
+        try:
+            from pymatgen.core import Composition  # noqa: F401 (validates [mp] present)
+        except ImportError as e:
+            console.print(f"[red]Battery failed: {e}[/red]")
+            raise typer.Exit(1) from None
+        from matgraph.verticals.battery import battery_metrics
+
+        # Best-effort MP enrichment; formula-only (exact capacity) works keyless.
+        api_key = get_api_key()
+        struct, fe = None, None
+        if api_key:
+            try:
+                from matgraph.client import fetch_materials_data
+
+                docs = fetch_materials_data(formula, api_key)
+                if docs:
+                    struct = docs[0].structure
+                    fe = docs[0].formation_energy_per_atom
+            except Exception as e:
+                console.print(f"[dim]MP enrichment skipped: {e}[/dim]")
+        try:
+            m = battery_metrics(formula, structure=struct, formation_energy_per_atom=fe)
+        except Exception as e:
+            console.print(f"[red]Battery Error: {e}[/red]")
+            return
+
+    table = Table(title=f"Battery Screening: {m['formula']}")
+    table.add_column("Metric", style="cyan")
+    table.add_column("Value", style="bold")
+    table.add_row("Theoretical capacity", f"{m['theoretical_capacity_mah_g']} mAh/g")
+    table.add_row(
+        "Avg voltage (ML est.)",
+        f"{m['avg_voltage_V_proxy']} V" if m["avg_voltage_V_proxy"] is not None else "N/A",
+    )
+    table.add_row("Carrier", str(m["carrier"]))
+    table.add_row("Method", str(m["method"])[:80])
+    console.print(table)
+    console.print(f"[dim]{m['reference']}[/dim]")
+
 
 @app.command()
 def model_list():
@@ -1247,7 +1347,11 @@ def serve(port: int = 8000):
 
     console.print(f"[green]Starting modern GraphQL server on port {port}...[/green]")
     console.print(f"[cyan]Explore the API at http://localhost:{port}/graphql[/cyan]")
-    import uvicorn
+    try:
+        import uvicorn
+    except ImportError as e:
+        console.print(f"[red]Serve failed: {e}[/red]")
+        raise typer.Exit(1) from None
     uvicorn.run("matgraph.graphql_app:app", host="0.0.0.0", port=port, reload=False)
 
 @quantum_app.command("vqe")

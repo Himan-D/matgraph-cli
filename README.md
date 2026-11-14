@@ -6,7 +6,8 @@
   [![PyPI version](https://badge.fury.io/py/matgraph-cli.svg)](https://badge.fury.io/py/matgraph-cli)
   [![Downloads](https://static.pepy.tech/badge/matgraph-cli)](https://pepy.tech/project/matgraph-cli)
   [![GitHub stars](https://img.shields.io/github/stars/Himan-D/matgraph-cli?style=social)](https://github.com/Himan-D/matgraph-cli)
-  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Himan-D/matgraph-cli/blob/main/notebooks/MatGraph_Tutorial.ipynb)
+  [![Docs](https://img.shields.io/badge/docs-matgraph-blue)](https://himan-d.github.io/matgraph-cli/)
+  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Himan-D/matgraph-cli/blob/main/notebooks/MatGraph_60sec_Demo.ipynb)
   <br/>
   <p>⭐ <strong>If this saved you time, star <a href="https://github.com/Himan-D/matgraph-cli">Himan-D/matgraph-cli</a> — it helps others discover it!</strong></p>
 </div>
@@ -31,18 +32,33 @@ Researchers spend weeks writing boilerplate to fetch crystal data, engineer feat
 ## Installation
 
 ```bash
-# Recommended (fastest)
-uv tool install matgraph-cli
-
-# Or standard pip
+# Slim base: CLI + cache + zero-config demo (~30 MB, no PyTorch)
 pip install matgraph-cli
+
+# Full ML stack (M3GNet/MEGNet/CHGNet, relax, train, GA)
+pip install "matgraph-cli[ml]"
+
+# API server / dashboard / everything
+pip install "matgraph-cli[api]"   # GraphQL + REST
+pip install "matgraph-cli[all]"   # everything
 ```
 
-Set your free [Materials Project](https://materialsproject.org/) API key:
+Try it in 60 seconds — no API key needed:
+
+```bash
+matgraph predict Si --demo
+matgraph xrd Si --demo
+```
+
+For **live** predictions, set your free [Materials Project](https://materialsproject.org/) API key:
 
 ```bash
 export MP_API_KEY="your_key_here"
 ```
+
+Conda users: `conda install -c conda-forge matgraph-cli` (feedstock lands after
+v3.0.0 — see [`conda-recipe/`](conda-recipe/README.md)). Docker:
+`docker build -t matgraph .` (ships `[api,ml]`, serves GraphQL on :8000).
 
 ---
 
@@ -51,6 +67,12 @@ export MP_API_KEY="your_key_here"
 ### CLI
 
 ```bash
+# Zero-config demo (bundled samples, no key, no ML stack)
+matgraph predict LiFePO4 --demo
+matgraph xrd LiFePO4 --demo
+matgraph substitute LiFePO4 Li Na --demo
+
+# ---- Live predictions (needs "matgraph-cli[ml]" + MP_API_KEY) ----
 # Predict band gap and formation energy
 matgraph predict LiFePO4
 
@@ -83,6 +105,11 @@ matgraph --version
 ```python
 from matgraph import MatGraphSDK
 
+# Zero-config demo first (bundled samples, no key needed)
+demo = MatGraphSDK(demo=True)
+print(demo.predict("Si")[0]["predicted_form_energy"])
+
+# Live predictions (needs "matgraph-cli[ml]" + MP_API_KEY)
 sdk = MatGraphSDK()
 
 # Predict properties
@@ -103,10 +130,15 @@ print(f"Formation energy MAE: {metrics['formation_energy_mae']}")
 
 ### GraphQL API
 
+```bash
+pip install "matgraph-cli[api]"
+```
+
 Start the server:
 
 ```bash
 uvicorn matgraph.graphql_app:app --reload
+# or: matgraph serve
 ```
 
 Generate an API key:
@@ -131,9 +163,9 @@ Or open `http://localhost:8000/graphql` for the interactive GraphiQL playground.
 
 ## Features
 
-> **Current: v2.15.0** — auto-updated via `scripts/update_readme.py` (run on release). Badges above are dynamic (PyPI/pepy/GitHub).
+> **Current: v3.0.0** — auto-updated via `scripts/update_readme.py` (run on release). Badges above are dynamic (PyPI/pepy/GitHub).
 
-### Deep Learning Models (2.15.0 — six FMMs inc. OMat24)
+### Deep Learning Models (3.0.0 — six FMMs inc. OMat24)
 
 | Model | Predicts | Architecture | Checkpoint | Band gap |
 |---|---|---|---|---|
@@ -260,6 +292,13 @@ matgraph/
 
 ## Changelog
 
+### v3.0.0
+- **Slim base install** (~30 MB): CLI + cache + demo; ML/API/UI are opt-in extras
+- **Zero-config demo mode**: `matgraph predict Si --demo`, `MatGraphSDK(demo=True)` — no key, no PyTorch
+- **Actionable errors**: missing extras name the exact `pip install "matgraph-cli[<extra>]"` command
+- Hosted docs, `CITATION.cff`, conda-forge recipe, Hugging Face demo, 60-second Colab notebook
+- ⚠️ **Breaking**: default install no longer includes torch/pymatgen/mp-api — add `[ml]` for live predictions
+
 ### v1.1.0
 - Replaced AWS CDN with zero-config SQLite cache
 - Added `matgraph cache stats` and `matgraph cache clear` commands
@@ -309,14 +348,16 @@ Open an issue before submitting major pull requests.
 
 ## Citation
 
-If you use MatGraph in your research, please cite:
+If you use MatGraph in your research, please cite it (see [CITATION.cff](CITATION.cff) —
+GitHub's "Cite this repository" button picks it up automatically):
 
 ```bibtex
-@software{matgraph2025,
-  author = {Himan},
+@software{matgraph2026,
+  author = {Himan, D},
   title = {MatGraph: Deep Learning Toolkit for Materials Science},
   url = {https://github.com/Himan-D/matgraph-cli},
-  year = {2025}
+  version = {3.0.0},
+  year = {2026}
 }
 ```
 

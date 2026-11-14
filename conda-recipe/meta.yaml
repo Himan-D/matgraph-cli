@@ -1,0 +1,64 @@
+{% set name = "matgraph-cli" %}
+{% set version = "3.0.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  # NOTE FOR MAINTAINER: after releasing v3.0.0 on PyPI, fill in the real
+  # sdist URL + sha256 (see conda-recipe/README.md), then submit to
+  # conda-forge/staged-recipes.
+  url: https://pypi.org/packages/source/m/matgraph-cli/matgraph-cli-{{ version }}.tar.gz
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+
+build:
+  noarch: python
+  number: 0
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  host:
+    - python >=3.9
+    - pip
+    - hatchling
+  run:
+    # Slim base only. Heavy stacks stay pip extras (conda has no `matgraph-cli[ml]`
+    # equivalent); users add them with: pip install "matgraph-cli[ml]"
+    - python >=3.9
+    - typer >=0.9.0
+    - rich >=13.0.0
+    - pydantic >=2.0.0
+    - pydantic-settings >=2.0.0
+    - numpy >=1.24.0
+
+test:
+  requires:
+    - pip
+  commands:
+    - matgraph --help
+    - matgraph predict Si --demo
+    - matgraph xrd Si --demo
+    - matgraph cache stats
+  imports:
+    - matgraph
+    - matgraph.demo
+    - matgraph._extras
+
+about:
+  home: https://github.com/Himan-D/matgraph-cli
+  license: MIT
+  license_file: LICENSE
+  license_url: https://github.com/Himan-D/matgraph-cli/blob/main/LICENSE
+  summary: Deep learning toolkit for materials science researchers
+  description: |
+    MatGraph predicts material properties, screens hypothetical compounds,
+    simulates diffraction patterns, and serves predictions via API — from
+    one package. CLI + Python SDK + GraphQL, with M3GNet/MEGNet/CHGNet
+    potentials and a zero-config demo mode.
+  doc_url: https://himan-d.github.io/matgraph-cli/
+  dev_url: https://github.com/Himan-D/matgraph-cli
+
+extra:
+  recipe-maintainers:
+    - Himan-D

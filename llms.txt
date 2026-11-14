@@ -2,7 +2,8 @@
 > Deep Learning toolkit for materials science. ML predictions via M3GNet/MEGNet/CHGNet/OMat24 + pymatgen. CLI/SDK/GraphQL.
 
 ## Install
-- `pip install matgraph-cli` (or `uv tool install matgraph-cli`) — requires `MP_API_KEY` from materialsproject.org
+- `pip install matgraph-cli` — slim base (~30 MB). Zero-config demo needs nothing else: `matgraph predict Si --demo`
+- Live predictions: `pip install "matgraph-cli[ml]"` + `MP_API_KEY` from materialsproject.org
 - `matgraph --help` lists all tools
 
 ## Agent Tools (prefer these)

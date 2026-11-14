@@ -1,6 +1,6 @@
 [project]
 name = "matgraph-cli"
-version = "2.15.0"
+version = "3.0.0"
 description = "Complete computational materials science toolkit: ML predictions, DFT bridge, stability, band structure, elastic, dielectric, magnetic, and genetic algorithm discovery"
 readme = {file = "README.md", content-type = "text/markdown"}
 requires-python = ">=3.9"
@@ -29,37 +29,31 @@ maintainers = [
     {name = "Himan", email = "himan@trinetralabs.ai"}
 ]
 dependencies = [
+    # Slim base: CLI + cache + demo mode work with these alone (~30 MB).
+    # Everything heavy is an extra; missing extras raise a helpful
+    # MissingExtraError telling the user exactly what to install.
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "strawberry-graphql>=0.210.0",
-    "fastapi>=0.103.0",
-    "uvicorn>=0.23.0",
-    "pymatgen>=2023.10.11",
-    "mp-api>=0.37.0",
-    "scikit-learn>=1.3.0",
-    "torch>=2.0.0",
-    "ase>=3.26.0",
-    "huggingface-hub>=1.8.0",
-    "gradio>=4.44.1",
-    "matgl>=1.2.1",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
     "numpy>=1.24.0",
-    "wandb>=0.15.0",
 ]
 
 [project.optional-dependencies]
+# Materials Project data layer (structures, band gaps, hull data)
+mp = ["pymatgen>=2023.10.11", "mp-api>=0.37.0"]
+# ML potentials (M3GNet/MEGNet/CHGNet, relax, GA, train, benchmark)
+ml = ["matgraph-cli[mp]", "torch>=2.0.0", "matgl>=1.2.1", "ase>=3.26.0", "scikit-learn>=1.3.0", "huggingface-hub>=1.8.0"]
 parquet = ["pandas>=2.0.0", "pyarrow>=12.0.0"]
 polars = ["polars>=0.19.0"]
-ml = ["matgl>=1.2.1", "torch>=2.0.0", "ase>=3.26.0"]
-dft = ["pymatgen>=2023.10.11", "ase>=3.26.0"]
+dft = ["matgraph-cli[mp]", "ase>=3.26.0"]
 api = ["fastapi>=0.103.0", "strawberry-graphql>=0.210.0", "uvicorn>=0.23.0"]
 ui = ["gradio>=4.44.1"]
 tracking = ["wandb>=0.15.0"]
-diffusion = ["torch>=2.0.0"]
-omat24 = ["fairchem-core>=1.0.0", "torch>=2.0.0"]
+diffusion = ["matgraph-cli[ml]"]
+omat24 = ["matgraph-cli[ml]", "fairchem-core>=1.0.0"]
 quantum = ["pennylane>=0.35.0"]
-all = ["matgraph-cli[parquet,polars,ml,dft,api,ui,tracking,diffusion,omat24,quantum]"]
+all = ["matgraph-cli[mp,ml,parquet,polars,dft,api,ui,tracking,diffusion,omat24,quantum]"]
 dev = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "ruff>=0.2.0", "mypy>=1.8.0", "httpx>=0.24.0"]
 
 [project.scripts]
@@ -78,6 +72,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["matgraph"]
+
+[tool.hatch.build.targets.sdist]
+# Explicit allowlist: never sweep up wandb logs, caches, or local artifacts.
+include = ["matgraph", "pyproject.toml", "README.md", "LICENSE", "llms.txt"]
 
 [dependency-groups]
 dev = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "ruff>=0.2.0", "mypy>=1.8.0", "httpx>=0.24.0"]

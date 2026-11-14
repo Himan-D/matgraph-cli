@@ -1,0 +1,48 @@
+site_name: MatGraph
+site_description: Deep learning toolkit for materials science — predict properties, screen compounds, simulate XRD, serve via API.
+site_url: https://himan-d.github.io/matgraph-cli/
+repo_url: https://github.com/Himan-D/matgraph-cli
+repo_name: Himan-D/matgraph-cli
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - search.suggest
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Tutorials: tutorials.md
+  - CLI Reference: cli-reference.md
+  - SDK Reference: sdk-reference.md
+  - GraphQL API: graphql-api.md
+  - Models: models.md
+  - MatGraph vs raw stack: comparison.md
+  - Growth & Distribution: growth.md

@@ -1,0 +1,174 @@
+{
+ "formula": "Si",
+ "material_id": "demo-Si-1",
+ "crystal_system": "Cubic",
+ "true_band_gap": 1.12,
+ "predicted_band_gap": null,
+ "band_gap_source": "demo_sample",
+ "true_form_energy": 0.0,
+ "predicted_form_energy": -0.02,
+ "m3gnet_energy": -9.1,
+ "m3gnet_forces": [
+  [
+   -0.02,
+   -0.01,
+   0.0
+  ],
+  [
+   -0.01,
+   0.0,
+   0.01
+  ],
+  [
+   0.0,
+   0.01,
+   0.02
+  ],
+  [
+   0.01,
+   0.02,
+   -0.02
+  ],
+  [
+   0.02,
+   -0.02,
+   -0.01
+  ],
+  [
+   -0.02,
+   -0.01,
+   0.0
+  ],
+  [
+   -0.01,
+   0.0,
+   0.01
+  ],
+  [
+   0.0,
+   0.01,
+   0.02
+  ]
+ ],
+ "m3gnet_stresses": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ],
+  [
+   0.0,
+   0.0,
+   0.0
+  ]
+ ],
+ "features": {
+  "num_elements": 1,
+  "mean_atomic_mass": 28.0855,
+  "volume": 160.1915,
+  "density": 2.3291
+ },
+ "xrd": {
+  "two_theta": [
+   28.4655,
+   47.3427,
+   56.171,
+   69.1928,
+   76.448,
+   88.1183
+  ],
+  "intensity": [
+   100.0,
+   66.649,
+   39.586,
+   10.713,
+   16.341,
+   23.507
+  ],
+  "hkls": [
+   [
+    [
+     1,
+     1,
+     1
+    ]
+   ],
+   [
+    [
+     2,
+     2,
+     0
+    ]
+   ],
+   [
+    [
+     3,
+     1,
+     1
+    ]
+   ],
+   [
+    [
+     4,
+     0,
+     0
+    ]
+   ],
+   [
+    [
+     3,
+     3,
+     1
+    ]
+   ],
+   [
+    [
+     4,
+     2,
+     2
+    ]
+   ]
+  ]
+ },
+ "structure_cif": "# generated using pymatgen\ndata_Si\n_symmetry_space_group_name_H-M   'P 1'\n_cell_length_a   5.43100000\n_cell_length_b   5.43100000\n_cell_length_c   5.43100000\n_cell_angle_alpha   90.00000000\n_cell_angle_beta   90.00000000\n_cell_angle_gamma   90.00000000\n_symmetry_Int_Tables_number   1\n_chemical_formula_structural   Si\n_chemical_formula_sum   Si8\n_cell_volume   160.19147799\n_cell_formula_units_Z   8\nloop_\n _symmetry_equiv_pos_site_id\n _symmetry_equiv_pos_as_xyz\n  1  'x, y, z'\nloop_\n _atom_site_type_symbol\n _atom_site_label\n _atom_site_symmetry_multiplicity\n _atom_site_fract_x\n _atom_site_fract_y\n _atom_site_fract_z\n _atom_site_occupancy\n  Si  Si0  1  0.50000000  0.00000000  0.50000000  1\n  Si  Si1  1  0.25000000  0.25000000  0.25000000  1\n  Si  Si2  1  0.00000000  0.00000000  0.00000000  1\n  Si  Si3  1  0.25000000  0.75000000  0.75000000  1\n  Si  Si4  1  0.75000000  0.25000000  0.75000000  1\n  Si  Si5  1  0.00000000  0.50000000  0.50000000  1\n  Si  Si6  1  0.50000000  0.50000000  0.00000000  1\n  Si  Si7  1  0.75000000  0.75000000  0.25000000  1\n",
+ "battery": {
+  "formula": "Si",
+  "theoretical_capacity_mah_g": 0.0,
+  "avg_voltage_V_ml": 2.1,
+  "avg_voltage_V_proxy": 2.1,
+  "carrier": "unknown",
+  "method": "ML eform via m3gnet + DL voltage head; pymatgen.apps.battery.analyzer available (needs phase diagram \u2014 using ML eform + DL fallback)",
+  "reference": "pymatgen BatteryAnalyzer; Goodenough & Park JACS 2013",
+  "uncertainty": 0.3,
+  "provenance": {
+   "model": "m3gnet",
+   "ml": true,
+   "scientific_lib": "pymatgen.apps.battery"
+  }
+ },
+ "provenance": {
+  "mode": "demo",
+  "generated_utc": "2026-11-14T07:03:43+00:00",
+  "computed": [
+   "structure",
+   "features",
+   "xrd",
+   "battery.capacity"
+  ],
+  "sample": [
+   "true_band_gap",
+   "true_form_energy",
+   "predicted_form_energy",
+   "m3gnet_energy",
+   "m3gnet_forces",
+   "m3gnet_stresses",
+   "battery.voltage"
+  ],
+  "note": "Bundled zero-config sample. Structure/features/XRD/capacity are computed from real crystallographic data; ML numbers are illustrative samples, NOT predictions."
+ }
+}

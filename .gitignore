@@ -3,3 +3,10 @@ __pycache__
 *.pyc
 dist/
 .DS_Store
+wandb/
+.matgraph_cache/
+viz_parity.csv
+runs.csv
+runs.json
+runs.parquet
+site/

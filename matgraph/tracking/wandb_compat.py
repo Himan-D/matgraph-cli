@@ -6,6 +6,11 @@ import os
 # Re-export wandb-like API with local fallback
 try:
     import wandb as _real_wandb
+
+    if getattr(_real_wandb, "__file__", None) is None:
+        # Namespace shadow (e.g. a ./wandb logs dir on sys.path from an
+        # editable install), not the real package.
+        raise ImportError("wandb resolved to a namespace package, ignoring")
     _HAS_WANDB = True
 except Exception:
     _real_wandb = None  # type: ignore

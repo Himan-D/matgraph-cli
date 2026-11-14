@@ -59,6 +59,15 @@ def simulate_xrd(structure):
         "hkls": [[hkl["hkl"] for hkl in hkls] for hkls in pattern.hkls],
     }
 
+def _safe_torch_version():
+    try:
+        import torch
+
+        return torch.__version__
+    except Exception:
+        return None
+
+
 def _provenance(seed: Optional[int] = None) -> dict:
     ts = datetime.datetime.utcnow().isoformat() + "Z"
     # git sha best-effort
@@ -107,7 +116,7 @@ def _provenance(seed: Optional[int] = None) -> dict:
         "git_sha": git_sha,
         "device": device,
         "seed": seed,
-        "torch_version": __import__("torch").__version__ if "torch" in globals() or __import__("importlib").util.find_spec("torch") else None,
+        "torch_version": _safe_torch_version(),
         "band_gap_source": "mp_experimental",
         "band_gap_note": "No reliable ML band-gap model shipped — predicted_band_gap is None; use true_band_gap from Materials Project for filtering only.",
     }

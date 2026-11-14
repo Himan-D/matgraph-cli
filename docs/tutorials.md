@@ -4,6 +4,33 @@ Practical walkthroughs for common MatGraph workflows.
 
 ---
 
+## Tutorial 0: First run in 60 seconds (no API key)
+
+Every tutorial below uses live predictions, which need `pip install
+"matgraph-cli[ml]"` plus a free Materials Project key. But you can learn the
+whole interface first on bundled demo data — no key, no PyTorch:
+
+```bash
+pip install matgraph-cli
+matgraph predict LiFePO4 --demo     # sample prediction
+matgraph battery LiFePO4 --demo     # cathode screening (exact 169.89 mAh/g)
+matgraph xrd Si --demo              # real Cu-Ka pattern
+```
+
+```python
+from matgraph import MatGraphSDK
+sdk = MatGraphSDK(demo=True)
+sdk.predict("Si")
+sdk.battery("LiFePO4")
+sdk.xrd("Si")
+```
+
+Demo output is loudly labeled: structures, XRD, and capacity are real
+crystallography; ML numbers are illustrative samples. When you're ready for
+live predictions, continue to [Installation](installation.md).
+
+---
+
 ## Tutorial 1: Screen Battery Cathode Materials
 
 Find which alkali metal substitutions in LiFePO4 produce stable cathode candidates.
